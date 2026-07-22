@@ -43,7 +43,7 @@ function copySubject(idx) {
     const btn = document.getElementById('copy-subj-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Subject', 2000);
-  });
+  }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 
 function copyBody(idx) {
@@ -52,7 +52,7 @@ function copyBody(idx) {
     const btn = document.getElementById('copy-body-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Body', 2000);
-  });
+  }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 </script>
 {% endblock %}

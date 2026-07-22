@@ -333,12 +333,18 @@ def dashboard():
         goal_row = conn.execute(
             "SELECT value FROM settings WHERE key='weekly_goal'"
         ).fetchone()
-        weekly_goal = int(goal_row['value']) if goal_row and goal_row['value'] else None
+        try:
+            weekly_goal = int(goal_row['value']) if goal_row and goal_row['value'] else None
+        except (ValueError, TypeError):
+            weekly_goal = None
 
         monthly_goal_row = conn.execute(
             "SELECT value FROM settings WHERE key='monthly_goal'"
         ).fetchone()
-        monthly_goal = int(monthly_goal_row['value']) if monthly_goal_row and monthly_goal_row['value'] else None
+        try:
+            monthly_goal = int(monthly_goal_row['value']) if monthly_goal_row and monthly_goal_row['value'] else None
+        except (ValueError, TypeError):
+            monthly_goal = None
 
         this_month_start = date.today().replace(day=1).isoformat()
         this_month_count = conn.execute(

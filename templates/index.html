@@ -270,10 +270,13 @@ function deleteJob(jobId, company) {
   function doDelete() {
     if (deleted) return;
     deleted = true;
-    fetch(`/job/${jobId}/delete`, { method: 'POST' }).then(() => {
-      card.remove();
-      updateBulkBar();
-    });
+    fetch(`/job/${jobId}/delete`, { method: 'POST' })
+      .then(() => { card.remove(); updateBulkBar(); })
+      .catch(() => {
+        card.style.opacity = '1';
+        card.style.pointerEvents = '';
+        showToast('Delete failed — please try again', null, 4000);
+      });
     dismissToast(toast);
   }
 

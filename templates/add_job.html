@@ -213,8 +213,8 @@ function addRow() {
 
 // Feature 13: Confirm before leaving unsaved form
 let formDirty = false;
-document.querySelector('form').addEventListener('input', () => formDirty = true);
-document.querySelector('form').addEventListener('submit', () => formDirty = false);
+document.getElementById('add-job-form').addEventListener('input', () => formDirty = true);
+document.getElementById('add-job-form').addEventListener('submit', () => formDirty = false);
 window.addEventListener('beforeunload', e => {
   if (formDirty) {
     e.preventDefault();

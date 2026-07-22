@@ -450,7 +450,7 @@ function copyJD(e) {
     const btn = document.getElementById('copy-jd-btn');
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy JD', 2000);
-  });
+  }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 </script>
 {% endblock %}
