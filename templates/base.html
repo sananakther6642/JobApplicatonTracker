@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,8 +25,29 @@
     --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
   }
+
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --white: #1e293b;
+    --border: #334155;
+    --border2: #475569;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --accent: #3b82f6;
+    --accent-light: #1e3a5f;
+    --danger: #ef4444;
+    --danger-light: #3b1111;
+    --success: #22c55e;
+    --success-light: #0f2e1a;
+    --warn: #f59e0b;
+    --warn-light: #2d1e00;
+    --shadow: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; transition: background 0.2s, color 0.2s; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
@@ -50,6 +71,20 @@
   nav a.nav-link.active { color: var(--accent); background: var(--accent-light); }
   .spacer { flex: 1; }
 
+  /* Dark mode toggle */
+  .dark-toggle {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 5px 9px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text2);
+    margin-right: 8px;
+    transition: all 0.15s;
+  }
+  .dark-toggle:hover { background: var(--bg); color: var(--text); }
+
   /* Layout */
   .container { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
   .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
@@ -70,6 +105,14 @@
   .btn-ghost { background: none; color: var(--text2); border: none; box-shadow: none; padding: 5px 8px; }
   .btn-ghost:hover { color: var(--text); background: var(--bg); filter: none; }
 
+  /* Star button */
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; padding: 2px 6px; line-height: 1;
+    transition: transform 0.1s;
+  }
+  .star-btn:hover { transform: scale(1.2); }
+
   /* Cards */
   .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 
@@ -80,6 +123,17 @@
     font-size: 11px; font-weight: 600;
     letter-spacing: 0.2px;
   }
+
+  /* Tag pills */
+  .tag-pill {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 11px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid var(--border);
+    text-decoration: none;
+  }
+  .tag-pill:hover { text-decoration: none; filter: brightness(0.95); }
 
   /* Forms */
   .form-group { margin-bottom: 18px; }
@@ -106,6 +160,16 @@
   .s-withdrawn  { background: #f8fafc; color: #475569; }
   .s-ghosted    { background: #f8fafc; color: #64748b; }
 
+  [data-theme="dark"] .s-applied    { background: #1e3a5f; color: #93c5fd; }
+  [data-theme="dark"] .s-screening  { background: #2e1a5e; color: #c4b5fd; }
+  [data-theme="dark"] .s-phone      { background: #2d1e00; color: #fcd34d; }
+  [data-theme="dark"] .s-technical  { background: #2a1200; color: #fdba74; }
+  [data-theme="dark"] .s-final      { background: #2d0a1e; color: #f9a8d4; }
+  [data-theme="dark"] .s-offer      { background: #052e16; color: #86efac; }
+  [data-theme="dark"] .s-rejected   { background: #3b0000; color: #fca5a5; }
+  [data-theme="dark"] .s-withdrawn  { background: #1e293b; color: #94a3b8; }
+  [data-theme="dark"] .s-ghosted    { background: #1e293b; color: #64748b; }
+
   /* Timeline */
   .timeline { list-style: none; padding-left: 20px; position: relative; }
   .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--border); border-radius: 2px; }
@@ -128,10 +192,34 @@
   .text-muted { color: var(--text2); }
   .text-sm { font-size: 12px; }
 
+  /* Flash messages */
+  .flash-list { list-style: none; margin-bottom: 16px; }
+  .flash-msg {
+    padding: 12px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .flash-warning { background: var(--warn-light); border: 1px solid #fcd34d; color: var(--warn); }
+  .flash-error   { background: var(--danger-light); border: 1px solid #fecaca; color: var(--danger); }
+  .flash-success { background: var(--success-light); border: 1px solid #bbf7d0; color: var(--success); }
+  .flash-info    { background: var(--accent-light); border: 1px solid #bfdbfe; color: var(--accent); }
+
   details summary { cursor: pointer; list-style: none; user-select: none; }
   details summary::-webkit-details-marker { display: none; }
   details summary::before { content: '▸ '; font-size: 10px; }
   details[open] summary::before { content: '▾ '; }
+
+  /* Bulk action bar */
+  #bulk-bar {
+    display: none;
+    position: sticky; bottom: 0; left: 0; right: 0;
+    background: var(--white); border-top: 1px solid var(--border2);
+    padding: 12px 24px; z-index: 50;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+    align-items: center; gap: 12px;
+  }
+  #bulk-bar.visible { display: flex; }
 </style>
 </head>
 <body>
@@ -140,11 +228,42 @@
   <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
   <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">All Jobs</a>
   <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+  <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
   <span class="spacer"></span>
+  <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
+  <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
 </nav>
 <div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="flash-list">
+      {% for category, message in messages %}
+      <li class="flash-msg flash-{{ category }}">
+        {% if category == 'warning' %}⚠️{% elif category == 'error' %}❌{% elif category == 'success' %}✅{% else %}ℹ️{% endif %}
+        {{ message }}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  {% endwith %}
   {% block content %}{% endblock %}
 </div>
+
+<script>
+function toggleDark() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  const btn = document.getElementById('darkToggle');
+  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
+})();
+</script>
 </body>
 </html>

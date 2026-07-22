@@ -23,7 +23,7 @@
         <label style="cursor:pointer">
           <input type="radio" name="status" value="{{ s }}"
                  {% if s == job.status %}checked{% endif %}
-                 style="display:none" onchange="document.querySelectorAll('.status-pill').forEach(p=>p.classList.remove('selected'));this.nextElementSibling.classList.add('selected')">
+                 style="display:none">
           <span class="badge status-pill {{ status_class(s) }}"
                 style="cursor:pointer;border:2px solid transparent;padding:5px 12px;font-size:12px;transition:all 0.15s{% if s == job.status %};outline:2px solid currentColor;outline-offset:2px{% endif %}">
             {{ status_labels[s] }}
@@ -78,9 +78,52 @@
         </div>
       </div>
 
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Follow-up Date</label>
+          <input class="form-input" type="date" name="follow_up_date" value="{{ job.follow_up_date or '' }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Offer Deadline</label>
+          <input class="form-input" type="date" name="offer_deadline" value="{{ job.offer_deadline or '' }}">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Resume Version</label>
+          <input class="form-input" type="text" name="resume_version" value="{{ job.resume_version or '' }}" placeholder="e.g. v3, Senior-focused">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Tags <span style="font-weight:400;text-transform:none">(comma-separated)</span></label>
+          <input class="form-input" type="text" name="tags" value="{{ tag_str }}" placeholder="remote, fintech, startup">
+        </div>
+      </div>
+
       <div class="form-group" style="margin:0">
         <label class="form-label">Notes</label>
         <textarea class="form-input" name="notes" rows="3">{{ job.notes or '' }}</textarea>
+      </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Contact</div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Name</label>
+          <input class="form-input" type="text" name="recruiter_name" value="{{ job.recruiter_name or '' }}" placeholder="Jane Smith">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Email</label>
+          <input class="form-input" type="email" name="recruiter_email" value="{{ job.recruiter_email or '' }}" placeholder="jane@company.com">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Recruiter LinkedIn</label>
+        <input class="form-input" type="url" name="recruiter_linkedin" value="{{ job.recruiter_linkedin or '' }}" placeholder="https://linkedin.com/in/…">
       </div>
     </div>
 
@@ -104,7 +147,6 @@
 </div>
 
 <script>
-// Highlight selected status pill on page load
 document.querySelectorAll('input[name="status"]').forEach(radio => {
   if (radio.checked) {
     radio.nextElementSibling.style.outline = '2px solid currentColor';

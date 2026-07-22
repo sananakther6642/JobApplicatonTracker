@@ -11,6 +11,8 @@
   </div>
 
   <form method="post" action="{{ url_for('add_job') }}" enctype="multipart/form-data">
+
+    <!-- Job Info -->
     <div class="card" style="padding:24px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Info</div>
 
@@ -55,9 +57,31 @@
         </div>
       </div>
 
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Follow-up Date</label>
+          <input class="form-input" type="date" name="follow_up_date">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Offer Deadline</label>
+          <input class="form-input" type="date" name="offer_deadline">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Job URL</label>
+          <input class="form-input" type="url" name="job_url" placeholder="https://…">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Resume Version</label>
+          <input class="form-input" type="text" name="resume_version" placeholder="e.g. v3, Senior-focused">
+        </div>
+      </div>
+
       <div class="form-group" style="margin-bottom:18px">
-        <label class="form-label">Job URL</label>
-        <input class="form-input" type="url" name="job_url" placeholder="https://…">
+        <label class="form-label">Tags <span style="font-weight:400;text-transform:none;font-size:11px">(comma-separated)</span></label>
+        <input class="form-input" type="text" name="tags" placeholder="remote, fintech, startup">
       </div>
 
       <div class="form-group" style="margin:0">
@@ -66,6 +90,28 @@
       </div>
     </div>
 
+    <!-- Contact -->
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Contact</div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Name</label>
+          <input class="form-input" type="text" name="recruiter_name" placeholder="Jane Smith">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Email</label>
+          <input class="form-input" type="email" name="recruiter_email" placeholder="jane@company.com">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Recruiter LinkedIn</label>
+        <input class="form-input" type="url" name="recruiter_linkedin" placeholder="https://linkedin.com/in/…">
+      </div>
+    </div>
+
+    <!-- Job Description -->
     <div class="card" style="padding:24px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Description</div>
       <div class="form-group" style="margin:0">
@@ -73,6 +119,7 @@
       </div>
     </div>
 
+    <!-- Documents -->
     <div class="card" style="padding:24px;margin-bottom:20px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">Documents</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Auto-named as <code style="background:var(--bg);padding:1px 6px;border-radius:4px;font-size:11px">company_role_type.pdf</code></p>

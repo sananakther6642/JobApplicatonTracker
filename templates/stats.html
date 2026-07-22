@@ -4,6 +4,10 @@
 
 <div class="page-header">
   <h1>Stats</h1>
+  <div style="display:flex;gap:8px">
+    <a href="{{ url_for('salary') }}" class="btn btn-secondary">Salary Comparison</a>
+    <a href="{{ url_for('export_csv') }}" class="btn btn-secondary">Export CSV</a>
+  </div>
 </div>
 
 <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr)">

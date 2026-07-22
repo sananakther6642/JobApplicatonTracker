@@ -38,17 +38,38 @@
   </div>
 </div>
 
+{% if deadlines %}
+<!-- Offer Deadlines Alert -->
+<div style="background:var(--danger-light);border:1px solid #fecaca;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
+  <div style="font-weight:600;font-size:13px;color:var(--danger);margin-bottom:10px">⏳ {{ deadlines|length }} offer deadline{{ 's' if deadlines|length > 1 else '' }} in the next 7 days</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for job in deadlines %}
+    <a href="{{ url_for('job_detail', job_id=job.id) }}"
+       style="background:var(--white);border:1px solid #fecaca;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
+      <strong>{{ job.company }}</strong>
+      <span style="color:var(--text2)">{{ job.role }}</span>
+      <span style="color:var(--danger);font-weight:600">· deadline {{ job.offer_deadline }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% if followups %}
 <!-- Follow-up Alert -->
 <div style="background:var(--warn-light);border:1px solid #fcd34d;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
-  <div style="font-weight:600;font-size:13px;color:var(--warn);margin-bottom:10px">⏰ Follow up on {{ followups|length }} application{{ 's' if followups|length > 1 else '' }} (7+ days, no response)</div>
+  <div style="font-weight:600;font-size:13px;color:var(--warn);margin-bottom:10px">⏰ Follow up on {{ followups|length }} application{{ 's' if followups|length > 1 else '' }}</div>
   <div style="display:flex;flex-wrap:wrap;gap:8px">
     {% for job in followups %}
     <a href="{{ url_for('job_detail', job_id=job.id) }}"
        style="background:var(--white);border:1px solid #fcd34d;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
       <strong>{{ job.company }}</strong>
       <span style="color:var(--text2)">{{ job.role }}</span>
+      {% if job.follow_up_date %}
+      <span style="color:var(--warn);font-weight:600">· follow-up {{ job.follow_up_date }}</span>
+      {% else %}
       <span style="color:var(--text3)">· {{ job.applied_date }}</span>
+      {% endif %}
     </a>
     {% endfor %}
   </div>
@@ -57,7 +78,7 @@
 
 <div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
 
-  <!-- Active Jobs (Kanban-lite: just a clean list grouped by status) -->
+  <!-- Active Jobs -->
   <div>
     <h2 style="font-size:14px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Active Pipeline</h2>
     {% set active_statuses = ['phone_interview','technical_interview','final_interview','screening','applied'] %}
@@ -78,14 +99,17 @@
           <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
                onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
             <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</span>
+                {% if job.starred %}<span style="color:var(--warn)">★</span>{% endif %}
+              </div>
               <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
             </div>
             {% if job.applied_date %}
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
-              {% if job.location %}
-              <div style="font-size:11px;color:var(--text3)">{{ job.location }}</div>
+              {% if job.offer_deadline %}
+              <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
               {% endif %}
             </div>
             {% endif %}
