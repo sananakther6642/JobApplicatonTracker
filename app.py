@@ -87,6 +87,27 @@ def init_db():
                 value TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT DEFAULT '',
+                linkedin TEXT DEFAULT '',
+                company TEXT DEFAULT '',
+                title TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS interview_checklist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                round_id INTEGER,
+                item TEXT NOT NULL,
+                done INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS salary_negotiations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id INTEGER NOT NULL,
@@ -314,6 +335,17 @@ def dashboard():
         ).fetchone()
         weekly_goal = int(goal_row['value']) if goal_row and goal_row['value'] else None
 
+        monthly_goal_row = conn.execute(
+            "SELECT value FROM settings WHERE key='monthly_goal'"
+        ).fetchone()
+        monthly_goal = int(monthly_goal_row['value']) if monthly_goal_row and monthly_goal_row['value'] else None
+
+        this_month_start = date.today().replace(day=1).isoformat()
+        this_month_count = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE applied_date >= ?",
+            (this_month_start,)
+        ).fetchone()[0]
+
     offer_rate = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
     response_rate = round(
         (total - counts.get("applied", 0) - counts.get("ghosted", 0)) / total * 100, 1
@@ -339,6 +371,8 @@ def dashboard():
         next_action_jobs=next_action_jobs,
         this_week_count=this_week_count,
         weekly_goal=weekly_goal,
+        monthly_goal=monthly_goal,
+        this_month_count=this_month_count,
     )
 
 
@@ -348,17 +382,17 @@ def dashboard():
 
 @app.route("/settings", methods=["POST"])
 def save_settings():
-    weekly_goal = request.form.get("weekly_goal", "").strip()
-    if weekly_goal:
-        try:
-            weekly_goal = str(int(weekly_goal))
-            with get_db() as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES ('weekly_goal', ?)",
-                    (weekly_goal,)
-                )
-        except (ValueError, TypeError):
-            pass
+    with get_db() as conn:
+        for key in ("weekly_goal", "monthly_goal"):
+            val = request.form.get(key, "").strip()
+            if val:
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                        (key, str(int(val)))
+                    )
+                except (ValueError, TypeError):
+                    pass
     return redirect(url_for("dashboard"))
 
 
@@ -471,6 +505,31 @@ def index():
 # ---------------------------------------------------------------------------
 # Add / Edit job
 # ---------------------------------------------------------------------------
+
+@app.route("/quick-add", methods=["POST"])
+def quick_add():
+    company = request.form.get("company", "").strip()
+    role = request.form.get("role", "").strip()
+    if not company or not role:
+        flash("Company and Role are required.", "error")
+        return redirect(request.referrer or url_for("index"))
+    status = request.form.get("status", "applied")
+    if status not in STATUSES:
+        status = "applied"
+    with get_db() as conn:
+        cur = conn.execute(
+            """INSERT INTO jobs (company, role, status, applied_date, source)
+               VALUES (?,?,?,?,?)""",
+            (company, role, status, date.today().isoformat(),
+             request.form.get("source", "").strip())
+        )
+        job_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
+            (job_id, "Applied", date.today().isoformat(), "Quick add")
+        )
+    return redirect(url_for("job_detail", job_id=job_id))
+
 
 @app.route("/add", methods=["GET", "POST"])
 def add_job():
@@ -961,6 +1020,81 @@ def delete_round(job_id, round_id):
 
 
 # ---------------------------------------------------------------------------
+# Interview prep checklist
+# ---------------------------------------------------------------------------
+
+DEFAULT_CHECKLIST = [
+    "Research company background and recent news",
+    "Review job description thoroughly",
+    "Prepare answers for common behavioral questions (STAR format)",
+    "Prepare 3–5 questions to ask the interviewer",
+    "Review your resume and be ready to walk through it",
+    "Test your tech setup (camera, mic, internet)",
+    "Prepare relevant code samples or portfolio links",
+]
+
+@app.route("/job/<int:job_id>/checklist", methods=["GET", "POST"])
+def checklist(job_id):
+    with get_db() as conn:
+        job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return redirect(url_for("index"))
+
+        if request.method == "POST":
+            action = request.form.get("action")
+            if action == "add":
+                item = request.form.get("item", "").strip()
+                if item:
+                    conn.execute(
+                        "INSERT INTO interview_checklist (job_id, item) VALUES (?,?)",
+                        (job_id, item)
+                    )
+            elif action == "toggle":
+                item_id = request.form.get("item_id")
+                if item_id:
+                    row = conn.execute(
+                        "SELECT done FROM interview_checklist WHERE id=? AND job_id=?",
+                        (item_id, job_id)
+                    ).fetchone()
+                    if row:
+                        conn.execute(
+                            "UPDATE interview_checklist SET done=? WHERE id=?",
+                            (0 if row["done"] else 1, item_id)
+                        )
+            elif action == "delete":
+                item_id = request.form.get("item_id")
+                if item_id:
+                    conn.execute(
+                        "DELETE FROM interview_checklist WHERE id=? AND job_id=?",
+                        (item_id, job_id)
+                    )
+            elif action == "seed":
+                existing = conn.execute(
+                    "SELECT COUNT(*) FROM interview_checklist WHERE job_id=?", (job_id,)
+                ).fetchone()[0]
+                if existing == 0:
+                    for item in DEFAULT_CHECKLIST:
+                        conn.execute(
+                            "INSERT INTO interview_checklist (job_id, item) VALUES (?,?)",
+                            (job_id, item)
+                        )
+            return redirect(url_for("checklist", job_id=job_id))
+
+        items = conn.execute(
+            "SELECT * FROM interview_checklist WHERE job_id=? ORDER BY created_at ASC",
+            (job_id,)
+        ).fetchall()
+
+    done_count = sum(1 for i in items if i["done"])
+    return render_template(
+        "checklist.html",
+        job=job,
+        items=items,
+        done_count=done_count,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Bulk status update
 # ---------------------------------------------------------------------------
 
@@ -1039,6 +1173,127 @@ def export_csv():
     response.headers["Content-Disposition"] = f"attachment; filename={fname}"
     response.headers["Content-Type"] = "text/csv"
     return response
+
+
+# ---------------------------------------------------------------------------
+# CSV import
+# ---------------------------------------------------------------------------
+
+@app.route("/import/csv", methods=["GET", "POST"])
+def import_csv():
+    if request.method == "POST":
+        f = request.files.get("csv_file")
+        if not f or not f.filename.endswith(".csv"):
+            flash("Please upload a valid .csv file.", "error")
+            return redirect(url_for("import_csv"))
+
+        imported = 0
+        skipped = 0
+        errors = []
+
+        try:
+            content = f.read().decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(content))
+
+            STATUS_REVERSE = {v.lower(): k for k, v in STATUS_LABELS.items()}
+            STATUS_REVERSE.update({k: k for k in STATUSES})
+
+            with get_db() as conn:
+                for i, row in enumerate(reader, start=2):
+                    company = (row.get("Company") or row.get("company") or "").strip()
+                    role = (row.get("Role") or row.get("role") or "").strip()
+                    if not company or not role:
+                        skipped += 1
+                        continue
+
+                    raw_status = (row.get("Status") or row.get("status") or "applied").strip()
+                    status = STATUS_REVERSE.get(raw_status.lower(), "applied")
+
+                    try:
+                        interest = int(row.get("Interest Score") or row.get("interest_score") or 0)
+                        interest = max(0, min(5, interest))
+                    except (ValueError, TypeError):
+                        interest = 0
+
+                    try:
+                        conn.execute(
+                            """INSERT INTO jobs
+                               (company, role, status, applied_date, location, salary_range,
+                                source, job_url, notes, recruiter_name, recruiter_email,
+                                recruiter_linkedin, follow_up_date, offer_deadline,
+                                resume_version, interest_score, next_action, rejection_reason)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            (
+                                company, role, status,
+                                (row.get("Applied Date") or row.get("applied_date") or "").strip() or date.today().isoformat(),
+                                (row.get("Location") or row.get("location") or "").strip(),
+                                (row.get("Salary Range") or row.get("salary_range") or "").strip(),
+                                (row.get("Source") or row.get("source") or "").strip(),
+                                (row.get("Job URL") or row.get("job_url") or "").strip(),
+                                (row.get("Notes") or row.get("notes") or "").strip(),
+                                (row.get("Recruiter Name") or row.get("recruiter_name") or "").strip(),
+                                (row.get("Recruiter Email") or row.get("recruiter_email") or "").strip(),
+                                (row.get("Recruiter LinkedIn") or row.get("recruiter_linkedin") or "").strip(),
+                                (row.get("Follow Up Date") or row.get("follow_up_date") or "").strip(),
+                                (row.get("Offer Deadline") or row.get("offer_deadline") or "").strip(),
+                                (row.get("Resume Version") or row.get("resume_version") or "").strip(),
+                                interest,
+                                (row.get("Next Action") or row.get("next_action") or "").strip(),
+                                (row.get("Rejection Reason") or row.get("rejection_reason") or "").strip(),
+                            )
+                        )
+                        imported += 1
+                    except Exception as e:
+                        errors.append(f"Row {i}: {e}")
+
+            msg = f"Imported {imported} job{'s' if imported != 1 else ''}."
+            if skipped:
+                msg += f" Skipped {skipped} rows (missing company/role)."
+            flash(msg, "success")
+            if errors:
+                for err in errors[:5]:
+                    flash(err, "warning")
+        except Exception as e:
+            flash(f"Failed to parse CSV: {e}", "error")
+
+        return redirect(url_for("index"))
+
+    return render_template("import_csv.html")
+
+
+# ---------------------------------------------------------------------------
+# Backup / Restore
+# ---------------------------------------------------------------------------
+
+@app.route("/backup")
+def backup_db():
+    if not os.path.exists(DB):
+        abort(404)
+    return send_from_directory(
+        os.path.dirname(DB),
+        os.path.basename(DB),
+        as_attachment=True,
+        download_name=f"jobs_backup_{date.today().isoformat()}.db"
+    )
+
+
+@app.route("/restore", methods=["GET", "POST"])
+def restore_db():
+    if request.method == "POST":
+        f = request.files.get("db_file")
+        if not f or not f.filename.endswith(".db"):
+            flash("Please upload a valid .db file.", "error")
+            return redirect(url_for("restore_db"))
+        try:
+            import shutil
+            backup_path = DB + ".bak"
+            shutil.copy2(DB, backup_path)
+            f.save(DB)
+            flash("Database restored successfully. Previous DB saved as jobs.db.bak.", "success")
+        except Exception as e:
+            flash(f"Restore failed: {e}", "error")
+        return redirect(url_for("dashboard"))
+    return render_template("restore_db.html")
 
 
 # ---------------------------------------------------------------------------
@@ -1364,6 +1619,86 @@ def stats():
         dow_stats=dow_stats,
         rejection_breakdown=rejection_breakdown,
     )
+
+
+# ---------------------------------------------------------------------------
+# Contact book
+# ---------------------------------------------------------------------------
+
+@app.route("/contacts")
+def contacts():
+    search = request.args.get("search", "")
+    with get_db() as conn:
+        if search:
+            contacts_list = conn.execute(
+                """SELECT * FROM contacts WHERE name LIKE ? OR email LIKE ? OR company LIKE ?
+                   ORDER BY name ASC""",
+                (f"%{search}%", f"%{search}%", f"%{search}%")
+            ).fetchall()
+        else:
+            contacts_list = conn.execute(
+                "SELECT * FROM contacts ORDER BY name ASC"
+            ).fetchall()
+    return render_template("contacts.html", contacts=contacts_list, search=search)
+
+
+@app.route("/contacts/add", methods=["POST"])
+def add_contact():
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Name is required.", "error")
+        return redirect(url_for("contacts"))
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO contacts (name, email, linkedin, company, title, notes)
+               VALUES (?,?,?,?,?,?)""",
+            (
+                name,
+                request.form.get("email", "").strip(),
+                request.form.get("linkedin", "").strip(),
+                request.form.get("company", "").strip(),
+                request.form.get("title", "").strip(),
+                request.form.get("notes", "").strip(),
+            )
+        )
+    flash(f"Contact '{name}' added.", "success")
+    return redirect(url_for("contacts"))
+
+
+@app.route("/contacts/<int:contact_id>/delete", methods=["POST"])
+def delete_contact(contact_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
+    return redirect(url_for("contacts"))
+
+
+@app.route("/contacts/<int:contact_id>/edit", methods=["GET", "POST"])
+def edit_contact(contact_id):
+    with get_db() as conn:
+        contact = conn.execute("SELECT * FROM contacts WHERE id=?", (contact_id,)).fetchone()
+        if not contact:
+            return redirect(url_for("contacts"))
+        if request.method == "POST":
+            name = request.form.get("name", "").strip()
+            if not name:
+                flash("Name is required.", "error")
+                return redirect(url_for("edit_contact", contact_id=contact_id))
+            conn.execute(
+                """UPDATE contacts SET name=?, email=?, linkedin=?, company=?, title=?, notes=?
+                   WHERE id=?""",
+                (
+                    name,
+                    request.form.get("email", "").strip(),
+                    request.form.get("linkedin", "").strip(),
+                    request.form.get("company", "").strip(),
+                    request.form.get("title", "").strip(),
+                    request.form.get("notes", "").strip(),
+                    contact_id,
+                )
+            )
+            flash("Contact updated.", "success")
+            return redirect(url_for("contacts"))
+    return render_template("edit_contact.html", contact=contact)
 
 
 init_db()

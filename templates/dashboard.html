@@ -72,6 +72,36 @@
 </div>
 {% endif %}
 
+<!-- Monthly Goal -->
+{% if monthly_goal %}
+{% set month_pct = [(this_month_count / monthly_goal * 100)|int, 100]|min %}
+<div class="card" style="padding:16px 20px;margin-bottom:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:600">
+      Monthly Goal: <span style="color:var(--success)">{{ this_month_count }}</span> / {{ monthly_goal }} applications
+      {% if this_month_count >= monthly_goal %}<span style="color:var(--success);margin-left:6px">✓ Done!</span>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:6px;align-items:center">
+      <input type="number" name="monthly_goal" value="{{ monthly_goal }}" min="1" max="200"
+             class="form-input" style="width:70px;padding:5px 8px;font-size:12px">
+      <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+    </form>
+  </div>
+  <div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden">
+    <div style="background:{% if month_pct >= 100 %}var(--success){% else %}var(--success){% endif %};height:8px;width:{{ month_pct }}%;border-radius:6px;opacity:0.7;transition:width 0.3s"></div>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:14px 20px;margin-bottom:16px;border:1px dashed var(--border2)">
+  <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Set a monthly application goal.</div>
+  <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:8px;align-items:center">
+    <input type="number" name="monthly_goal" placeholder="e.g. 40" min="1" max="200"
+           class="form-input" style="width:100px;padding:7px 10px;font-size:13px">
+    <button type="submit" class="btn btn-secondary btn-sm">Set Monthly Goal</button>
+  </form>
+</div>
+{% endif %}
+
 {% if deadlines %}
 <!-- Offer Deadlines Alert -->
 <div style="background:var(--danger-light);border:1px solid #fecaca;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">

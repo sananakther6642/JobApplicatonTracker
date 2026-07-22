@@ -284,14 +284,59 @@
   <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
   <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
   <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
+  <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
   <span class="spacer"></span>
+  <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
+  <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
   <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+  <button class="btn btn-secondary btn-sm" onclick="openQuickAdd()" title="Quick Add (Q)" style="margin-right:6px">⚡ Quick Add</button>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
 </nav>
 
 <!-- Toast container -->
 <div id="toast-container"></div>
+
+<!-- Quick Add Modal -->
+<div id="quick-add-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.4);align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:var(--radius);padding:24px;width:100%;max-width:420px;box-shadow:var(--shadow-md);margin:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <span style="font-weight:700;font-size:15px">⚡ Quick Add</span>
+      <button onclick="closeQuickAdd()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;line-height:1">×</button>
+    </div>
+    <form method="post" action="{{ url_for('quick_add') }}" id="quick-add-form">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Company *</label>
+          <input class="form-input" type="text" name="company" id="qa-company" required placeholder="Google">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Role *</label>
+          <input class="form-input" type="text" name="role" id="qa-role" required placeholder="Senior SWE">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Status</label>
+          <select class="form-input" name="status">
+            <option value="applied">Applied</option>
+            <option value="screening">Screening</option>
+            <option value="phone_interview">Phone Interview</option>
+            <option value="offer">Offer</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Source</label>
+          <input class="form-input" type="text" name="source" placeholder="LinkedIn">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Save</button>
+        <button type="button" onclick="closeQuickAdd()" class="btn btn-secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -363,15 +408,69 @@ function undoToast(btn) {
   dismissToast(toast);
 }
 
+// Quick Add modal
+function openQuickAdd() {
+  const m = document.getElementById('quick-add-modal');
+  m.style.display = 'flex';
+  setTimeout(() => document.getElementById('qa-company').focus(), 50);
+}
+function closeQuickAdd() {
+  document.getElementById('quick-add-modal').style.display = 'none';
+  document.getElementById('quick-add-form').reset();
+}
+document.addEventListener('click', e => {
+  const modal = document.getElementById('quick-add-modal');
+  if (modal && e.target === modal) closeQuickAdd();
+});
+
+// Browser notifications for follow-up reminders
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+function scheduleFollowUpNotifications(followups) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  followups.forEach(f => {
+    new Notification('Job Tracker — Follow Up', {
+      body: `Follow up with ${f.company} (${f.role})`,
+      icon: '/favicon.ico',
+      tag: `followup-${f.id}`
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', requestNotificationPermission);
+
+// Search highlight
+function highlightSearch(term) {
+  if (!term || !term.trim()) return;
+  const cards = document.querySelectorAll('.job-card-row');
+  const re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  cards.forEach(card => {
+    card.querySelectorAll('span, div').forEach(el => {
+      if (el.children.length === 0 && el.textContent.trim()) {
+        el.innerHTML = el.textContent.replace(re, '<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>');
+      }
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const term = params.get('search');
+  if (term) highlightSearch(term);
+});
+
 // Keyboard shortcuts (Feature 11)
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
   if (e.key === 'n' || e.key === 'N') window.location.href = '/add';
+  if (e.key === 'q' || e.key === 'Q') openQuickAdd();
   if (e.key === 'd' || e.key === 'D') window.location.href = '/';
   if (e.key === 'j' || e.key === 'J') window.location.href = '/applications';
   if (e.key === 's' || e.key === 'S') window.location.href = '/stats';
   if (e.key === 'Escape') {
     document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
+    closeQuickAdd();
   }
 });
 
