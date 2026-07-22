@@ -35,6 +35,17 @@
         <label class="form-label">Note about this change (added to timeline)</label>
         <input class="form-input" type="text" name="status_note" placeholder="e.g. Got rejection email · Recruiter reached out · Passed phone screen">
       </div>
+
+      <!-- Rejection reason — shown when rejected is selected -->
+      <div id="rejection-reason-row" style="margin-top:14px;display:{% if job.status == 'rejected' %}block{% else %}none{% endif %}">
+        <label class="form-label">Rejection Reason</label>
+        <select class="form-input" name="rejection_reason">
+          <option value="">— Select reason —</option>
+          {% for r in rejection_reasons %}
+          <option value="{{ r }}" {% if job.rejection_reason == r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
 
     <!-- Core details -->
@@ -179,6 +190,9 @@ document.querySelectorAll('input[name="status"]').forEach(radio => {
     });
     radio.nextElementSibling.style.outline = '2px solid currentColor';
     radio.nextElementSibling.style.outlineOffset = '2px';
+    // Show rejection reason field when rejected is selected
+    const rejRow = document.getElementById('rejection-reason-row');
+    if (rejRow) rejRow.style.display = radio.value === 'rejected' ? 'block' : 'none';
   });
 });
 

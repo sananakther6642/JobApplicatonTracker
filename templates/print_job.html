@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ job.company }} — {{ job.role }} | Print</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    color: #0f172a;
+    background: #fff;
+    padding: 32px 40px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin: 20px 0 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+  .role { font-size: 16px; color: #475569; margin-bottom: 12px; }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; letter-spacing: .2px; margin-bottom: 12px;
+  }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 16px; }
+  .field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #94a3b8; margin-bottom: 3px; }
+  .field-value { font-size: 13px; }
+  .tag { display: inline-block; background: #eff6ff; color: #1d4ed8; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: 500; margin: 2px; }
+  .timeline-item { display: flex; gap: 12px; margin-bottom: 10px; }
+  .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; margin-top: 4px; }
+  .tl-date { font-size: 11px; color: #94a3b8; }
+  .tl-event { font-size: 13px; font-weight: 600; }
+  .tl-note { font-size: 12px; color: #64748b; }
+  .round-box { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+  pre, .pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; line-height: 1.7; }
+  .no-print { }
+
+  /* Status badge colors */
+  .s-applied    { background: #eff6ff; color: #1d4ed8; }
+  .s-screening  { background: #f5f3ff; color: #6d28d9; }
+  .s-phone      { background: #fffbeb; color: #b45309; }
+  .s-technical  { background: #fff7ed; color: #c2410c; }
+  .s-final      { background: #fdf2f8; color: #9d174d; }
+  .s-offer      { background: #f0fdf4; color: #15803d; }
+  .s-rejected   { background: #fef2f2; color: #b91c1c; }
+  .s-withdrawn  { background: #f8fafc; color: #475569; }
+  .s-ghosted    { background: #f8fafc; color: #64748b; }
+
+  @media print {
+    body { padding: 16px 20px; }
+    .no-print { display: none !important; }
+    @page { margin: 1cm; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Print button (hidden in print) -->
+<div class="no-print" style="margin-bottom:20px;display:flex;gap:10px;align-items:center">
+  <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">🖨 Print</button>
+  <a href="javascript:history.back()" style="color:#64748b;font-size:13px">← Back</a>
+</div>
+
+<!-- Header -->
+<h1>{{ job.company }}</h1>
+<div class="role">{{ job.role }}</div>
+
+{% macro sc(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
+
+<span class="badge {{ sc(job.status) }}">{{ status_labels.get(job.status, job.status) }}</span>
+
+{% if tags %}
+<div style="margin-bottom:12px">
+  {% for tag in tags %}<span class="tag">#{{ tag }}</span>{% endfor %}
+</div>
+{% endif %}
+
+<h2>Application Details</h2>
+<div class="grid3">
+  <div><div class="field-label">Applied</div><div class="field-value">{{ job.applied_date or '—' }}</div></div>
+  <div><div class="field-label">Status</div><div class="field-value">{{ status_labels.get(job.status, job.status) }}</div></div>
+  <div><div class="field-label">Source</div><div class="field-value">{{ job.source or '—' }}</div></div>
+  <div><div class="field-label">Location</div><div class="field-value">{{ job.location or '—' }}</div></div>
+  <div><div class="field-label">Salary</div><div class="field-value">{{ job.salary_range or '—' }}</div></div>
+  <div><div class="field-label">Resume Version</div><div class="field-value">{{ job.resume_version or '—' }}</div></div>
+</div>
+
+{% if job.job_url %}
+<div style="margin-bottom:12px"><div class="field-label">Job URL</div><div class="field-value">{{ job.job_url }}</div></div>
+{% endif %}
+
+{% if job.recruiter_name or job.recruiter_email or job.recruiter_linkedin %}
+<h2>Contact</h2>
+<div class="grid3">
+  {% if job.recruiter_name %}<div><div class="field-label">Name</div><div class="field-value">{{ job.recruiter_name }}</div></div>{% endif %}
+  {% if job.recruiter_email %}<div><div class="field-label">Email</div><div class="field-value">{{ job.recruiter_email }}</div></div>{% endif %}
+  {% if job.recruiter_linkedin %}<div><div class="field-label">LinkedIn</div><div class="field-value">{{ job.recruiter_linkedin }}</div></div>{% endif %}
+</div>
+{% endif %}
+
+{% if job.notes %}
+<h2>Notes</h2>
+<div class="pre">{{ job.notes }}</div>
+{% endif %}
+
+{% if job.next_action %}
+<h2>Next Action</h2>
+<div style="color:#2563eb;font-weight:500">→ {{ job.next_action }}</div>
+{% endif %}
+
+{% if rounds %}
+<h2>Interview Rounds</h2>
+{% for round in rounds %}
+<div class="round-box">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+    <span style="font-weight:700">{{ round.round_name }}</span>
+    {% if round.interview_date %}<span style="color:#64748b;font-size:12px">{{ round.interview_date }}</span>{% endif %}
+    {% if round.outcome %}<span style="font-size:11px;font-weight:600;color:{% if round.outcome=='Passed' %}#15803d{% elif round.outcome=='Failed' %}#b91c1c{% else %}#64748b{% endif %}">{{ round.outcome }}</span>{% endif %}
+  </div>
+  {% if round.notes %}<div style="color:#475569;font-size:12px;white-space:pre-wrap">{{ round.notes }}</div>{% endif %}
+  {% if round.questions_asked %}
+  <div style="margin-top:6px">
+    <div class="field-label" style="margin-bottom:3px">Questions</div>
+    <div style="color:#475569;font-size:12px;white-space:pre-wrap">{{ round.questions_asked }}</div>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% if timeline %}
+<h2>Timeline</h2>
+{% for event in timeline %}
+<div class="timeline-item">
+  <div class="tl-dot"></div>
+  <div>
+    <div class="tl-date">{{ event.event_date or '' }}</div>
+    <div class="tl-event">{{ event.event }}</div>
+    {% if event.notes %}<div class="tl-note">{{ event.notes }}</div>{% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if documents %}
+<h2>Documents</h2>
+{% for doc in documents %}
+<div style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
+  {{ doc.filename }} — {{ doc.doc_type }} (uploaded {{ doc.uploaded_at[:10] }})
+</div>
+{% endfor %}
+{% endif %}
+
+{% if job.jd %}
+<h2>Job Description</h2>
+<div class="pre" style="font-size:12px;color:#475569;max-height:none">{{ job.jd }}</div>
+{% endif %}
+
+<script>
+window.addEventListener('load', function() {
+  window.print();
+});
+</script>
+</body>
+</html>

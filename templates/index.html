@@ -14,7 +14,7 @@
 {% block content %}
 
 <div class="page-header">
-  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ counts.total }})</span></h1>
+  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ total_count }})</span></h1>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
 </div>
 
@@ -23,6 +23,7 @@
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <input type="text" name="search" value="{{ current_search }}"
            placeholder="Search company, role, JD…"
+           id="search-input"
            class="form-input" style="flex:1;min-width:180px;padding:8px 12px">
     <select name="sort" class="form-input" style="width:160px">
       <option value="applied_date" {% if current_sort=='applied_date' %}selected{% endif %}>Date Applied</option>
@@ -69,12 +70,23 @@
   </div>
 </form>
 
+<!-- All statuses JSON for inline dropdown -->
+<script>
+const ALL_STATUSES = {{ statuses | tojson }};
+const STATUS_LABELS_MAP = {{ status_labels | tojson }};
+const STATUS_CLASS_MAP = {
+  applied:'s-applied',screening:'s-screening',phone_interview:'s-phone',
+  technical_interview:'s-technical',final_interview:'s-final',offer:'s-offer',
+  rejected:'s-rejected',withdrawn:'s-withdrawn',ghosted:'s-ghosted'
+};
+</script>
+
 {% if jobs %}
 <form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
   <div style="display:flex;flex-direction:column;gap:8px">
     {% for job in jobs %}
     {% set d_ago = days_ago.get(job.id) %}
-    <div class="card job-card-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
+    <div class="card job-card-row" id="job-card-{{ job.id }}" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
       <!-- Checkbox -->
       <input type="checkbox" name="job_ids" value="{{ job.id }}"
              class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
@@ -83,6 +95,7 @@
       <!-- Star (fetch to avoid nested form) -->
       <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
               data-starred="{{ '1' if job.starred else '0' }}"
+              data-company="{{ job.company | e }}"
               onclick="toggleStar(this, {{ job.id }})">
         {{ '★' if job.starred else '☆' }}
       </button>
@@ -93,7 +106,13 @@
           {% if job.interest_score and job.interest_score > 0 %}
           {{ render_stars(job.interest_score) }}
           {% endif %}
-          <span class="badge {{ status_class(job.status) }}">{{ status_labels[job.status] }}</span>
+          <!-- Inline status badge — clickable -->
+          <span class="badge {{ status_class(job.status) }} status-badge"
+                style="cursor:pointer;position:relative"
+                data-job-id="{{ job.id }}"
+                data-status="{{ job.status }}"
+                title="Click to change status"
+                onclick="openStatusDropdown(event, this)">{{ status_labels[job.status] }}</span>
           {% if tags_by_job.get(job.id) %}
           <span style="display:flex;gap:4px;flex-wrap:wrap">
             {% for tag in tags_by_job[job.id] %}
@@ -132,7 +151,7 @@
         <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
         <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
         <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px"
-                onclick="deleteJob({{ job.id }}, '{{ job.company|replace("'", "\\'") }} — {{ job.role|replace("'", "\\'") }}')">🗑</button>
+                onclick="deleteJob({{ job.id }}, '{{ job.company|replace("'", "\\'") }}')">🗑</button>
       </div>
     </div>
     {% endfor %}
@@ -154,6 +173,40 @@
     <button type="button" class="btn btn-danger btn-sm" id="bulk-delete-btn" onclick="bulkDelete()">🗑 Delete selected</button>
   </div>
 </form>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:24px;flex-wrap:wrap">
+  {% set base_args = {'search': current_search, 'status': current_status, 'sort': current_sort, 'order': current_order, 'tag': current_tag, 'starred': '1' if starred_only else ''} %}
+  {% if page > 1 %}
+  <a href="{{ url_for('index', page=page-1, **base_args) }}" class="btn btn-secondary btn-sm">← Prev</a>
+  {% else %}
+  <span class="btn btn-secondary btn-sm" style="opacity:.4;pointer-events:none">← Prev</span>
+  {% endif %}
+
+  {% for p in range(1, total_pages+1) %}
+    {% if p == 1 or p == total_pages or (p >= page-2 and p <= page+2) %}
+    <a href="{{ url_for('index', page=p, **base_args) }}"
+       style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;font-size:13px;font-weight:{% if p==page %}700{% else %}500{% endif %};
+              {% if p==page %}background:var(--accent);color:#fff;text-decoration:none{% else %}background:var(--white);border:1px solid var(--border2);color:var(--text2);text-decoration:none{% endif %}">
+      {{ p }}
+    </a>
+    {% elif p == page-3 or p == page+3 %}
+    <span style="color:var(--text3);font-size:13px">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+  <a href="{{ url_for('index', page=page+1, **base_args) }}" class="btn btn-secondary btn-sm">Next →</a>
+  {% else %}
+  <span class="btn btn-secondary btn-sm" style="opacity:.4;pointer-events:none">Next →</span>
+  {% endif %}
+</div>
+<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:8px">
+  Showing {{ (page-1)*20+1 }}–{{ [(page*20), total_count]|min }} of {{ total_count }}
+</div>
+{% endif %}
+
 {% else %}
 <div class="empty">
   <div class="empty-icon">📭</div>
@@ -182,40 +235,187 @@ function toggleAll(cb) {
   document.querySelectorAll('.job-cb').forEach(c => c.checked = cb.checked);
   updateBulkBar();
 }
+
+// Feature 10: star with toast
 function toggleStar(btn, jobId) {
+  const starred = btn.dataset.starred === '1';
+  const company = btn.dataset.company || '';
   fetch(`/job/${jobId}/star`, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'next='
-  }).then(() => {
-    const starred = btn.dataset.starred === '1';
-    btn.textContent = starred ? '☆' : '★';
-    btn.dataset.starred = starred ? '0' : '1';
-    btn.title = starred ? 'Star' : 'Unstar';
+    body: 'ajax=1'
+  }).then(r => r.json()).then(data => {
+    btn.textContent = data.starred ? '★' : '☆';
+    btn.dataset.starred = data.starred ? '1' : '0';
+    btn.title = data.starred ? 'Unstar' : 'Star';
+    const msg = data.starred ? `★ Starred ${company}` : `Unstarred ${company}`;
+    showToast(msg, null, 3000);
   });
 }
+
+// Feature 2: undo delete with toast
+function deleteJob(jobId, company) {
+  const card = document.getElementById(`job-card-${jobId}`);
+  if (!card) return;
+  // Hide card immediately
+  card.style.transition = 'opacity 0.2s';
+  card.style.opacity = '0.4';
+  card.style.pointerEvents = 'none';
+
+  let deleteTimer = null;
+  let deleted = false;
+
+  const toast = showToast(`Deleted <strong>${company}</strong>`, null, null);
+
+  function doDelete() {
+    if (deleted) return;
+    deleted = true;
+    fetch(`/job/${jobId}/delete`, { method: 'POST' }).then(() => {
+      card.remove();
+      updateBulkBar();
+    });
+    dismissToast(toast);
+  }
+
+  function undoDelete() {
+    if (deleted) return;
+    if (deleteTimer) clearTimeout(deleteTimer);
+    card.style.opacity = '1';
+    card.style.pointerEvents = '';
+    dismissToast(toast);
+  }
+
+  // Add undo button to existing toast
+  const undoBtn = toast.querySelector('.toast-undo') || (() => {
+    const b = document.createElement('button');
+    b.className = 'toast-undo';
+    b.textContent = 'Undo';
+    // Insert before close button
+    const closeBtn = toast.querySelector('.toast-close');
+    toast.insertBefore(b, closeBtn);
+    return b;
+  })();
+  // Re-build toast with undo
+  const msgSpan = toast.querySelector('span');
+  if (msgSpan) msgSpan.innerHTML = `Deleted <strong>${company}</strong>`;
+  undoBtn.onclick = undoDelete;
+
+  deleteTimer = setTimeout(doDelete, 5000);
+  toast._timer = deleteTimer;
+  toast._undoCallback = undoDelete;
+}
+
 function bulkDelete() {
   const ids = [...document.querySelectorAll('.job-cb:checked')].map(c => c.value);
   if (!ids.length) return;
-  if (!confirm(`Delete ${ids.length} job${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-  Promise.all(ids.map(id =>
-    fetch(`/job/${id}/delete`, { method: 'POST' })
-  )).then(() => {
-    ids.forEach(id => {
-      const card = document.querySelector(`input[value="${id}"].job-cb`)?.closest('.job-card-row');
-      if (card) card.remove();
-    });
-    updateBulkBar();
+
+  // Hide cards immediately
+  ids.forEach(id => {
+    const card = document.getElementById(`job-card-${id}`);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
   });
-}
-function deleteJob(jobId, label) {
-  if (!confirm('Delete ' + label + '?')) return;
-  fetch(`/job/${jobId}/delete`, { method: 'POST' })
-    .then(() => {
-      const card = document.querySelector(`input[value="${jobId}"].job-cb`)?.closest('.job-card-row');
-      if (card) card.remove();
+
+  let deleted = false;
+  const label = `${ids.length} job${ids.length > 1 ? 's' : ''}`;
+  const toast = showToast(`Deleted <strong>${label}</strong>`, null, null);
+
+  const undoBtn = document.createElement('button');
+  undoBtn.className = 'toast-undo';
+  undoBtn.textContent = 'Undo';
+  const closeBtn = toast.querySelector('.toast-close');
+  toast.insertBefore(undoBtn, closeBtn);
+
+  function doDelete() {
+    if (deleted) return;
+    deleted = true;
+    Promise.all(ids.map(id => fetch(`/job/${id}/delete`, { method: 'POST' }))).then(() => {
+      ids.forEach(id => {
+        const card = document.getElementById(`job-card-${id}`);
+        if (card) card.remove();
+      });
       updateBulkBar();
     });
+    dismissToast(toast);
+  }
+
+  function undoBulk() {
+    if (deleted) return;
+    clearTimeout(deleteTimer);
+    ids.forEach(id => {
+      const card = document.getElementById(`job-card-${id}`);
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+    });
+    dismissToast(toast);
+  }
+
+  undoBtn.onclick = undoBulk;
+  let deleteTimer = setTimeout(doDelete, 5000);
+  toast._timer = deleteTimer;
+}
+
+// Feature 1: Inline status dropdown
+function openStatusDropdown(e, badge) {
+  e.stopPropagation();
+  // Remove any existing dropdown
+  document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
+
+  const jobId = badge.dataset.jobId;
+  const currentStatus = badge.dataset.status;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'status-dropdown';
+
+  ALL_STATUSES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'status-dropdown-item';
+    btn.textContent = STATUS_LABELS_MAP[s] || s;
+    if (s === currentStatus) {
+      btn.style.fontWeight = '700';
+      btn.style.color = 'var(--accent)';
+    }
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      changeStatus(jobId, s, badge, dropdown);
+    };
+    dropdown.appendChild(btn);
+  });
+
+  // Position relative to badge
+  const rect = badge.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.top = (rect.bottom + 4) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  document.body.appendChild(dropdown);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closeDD(ev) {
+      if (!dropdown.contains(ev.target)) {
+        dropdown.remove();
+        document.removeEventListener('click', closeDD);
+      }
+    });
+  }, 0);
+}
+
+function changeStatus(jobId, newStatus, badge, dropdown) {
+  dropdown.remove();
+  const body = new URLSearchParams({ new_status: newStatus });
+  fetch(`/job/${jobId}/quick-status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: body.toString()
+  }).then(r => r.json()).then(data => {
+    if (data.ok) {
+      // Update badge class and text
+      badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
+      badge.style.cursor = 'pointer';
+      badge.style.position = 'relative';
+      badge.dataset.status = data.status;
+      badge.textContent = data.label;
+      badge.setAttribute('title', 'Click to change status');
+    }
+  });
 }
 </script>
 

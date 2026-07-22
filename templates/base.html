@@ -248,6 +248,18 @@
   [data-theme="dark"] .heatmap-cell.cnt-2, [data-theme="dark"] .heatmap-cell.cnt-3 { background: #2563eb; }
   [data-theme="dark"] .heatmap-cell.cnt-4plus { background: #60a5fa; }
 
+  /* Toast notifications */
+  #toast-container { position:fixed; bottom:80px; right:24px; z-index:200; display:flex; flex-direction:column; gap:8px; }
+  .toast { background:var(--text); color:var(--white); padding:12px 16px; border-radius:8px; font-size:13px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-md); animation: slideIn 0.2s ease; min-width:280px; }
+  @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  .toast-undo { background:none; border:1px solid rgba(255,255,255,.4); color:var(--white); border-radius:5px; padding:3px 10px; cursor:pointer; font-size:12px; font-weight:600; }
+  .toast-close { background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer; font-size:16px; padding:0 2px; margin-left:auto; line-height:1; }
+
+  /* Status dropdown */
+  .status-dropdown { position:absolute; z-index:150; background:var(--white); border:1px solid var(--border2); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; padding:4px 0; }
+  .status-dropdown-item { display:block; width:100%; text-align:left; padding:7px 14px; font-size:12px; font-weight:500; background:none; border:none; cursor:pointer; color:var(--text); }
+  .status-dropdown-item:hover { background:var(--bg); }
+
   /* Mobile responsive */
   @media (max-width: 768px) {
     .container { padding: 16px; }
@@ -266,17 +278,21 @@
 <body>
 <nav>
   <span class="brand">🗂 Job Tracker</span>
-  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
-  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">All Jobs</a>
-  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" title="Dashboard (D)">Dashboard</a>
+  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" title="All Jobs (J)">All Jobs</a>
+  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}" title="Stats (S)">Stats</a>
   <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
   <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
   <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
   <span class="spacer"></span>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
   <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
-  <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
 </nav>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
 <div class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
@@ -308,14 +324,92 @@ function toggleDark() {
   if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
 })();
 
-// Feature 1: Press N to open Add Job
+// Toast system
+function showToast(msg, undoCallback, autoDismissMs) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  let inner = `<span style="flex:1">${msg}</span>`;
+  if (undoCallback) {
+    inner += `<button class="toast-undo" onclick="this._undoClicked=true;undoToast(this)">Undo</button>`;
+  }
+  inner += `<button class="toast-close" onclick="dismissToast(this.closest('.toast'))">&times;</button>`;
+  toast.innerHTML = inner;
+  container.appendChild(toast);
+
+  let timer = null;
+  if (autoDismissMs) {
+    timer = setTimeout(() => {
+      if (!toast._undone) dismissToast(toast);
+    }, autoDismissMs);
+    toast._timer = timer;
+  }
+  if (undoCallback) {
+    toast._undoCallback = undoCallback;
+  }
+  return toast;
+}
+function dismissToast(toast) {
+  if (!toast || !toast.parentNode) return;
+  toast.style.transition = 'opacity 0.2s';
+  toast.style.opacity = '0';
+  setTimeout(() => toast.remove(), 200);
+}
+function undoToast(btn) {
+  const toast = btn.closest('.toast');
+  toast._undone = true;
+  if (toast._timer) clearTimeout(toast._timer);
+  if (toast._undoCallback) toast._undoCallback();
+  dismissToast(toast);
+}
+
+// Keyboard shortcuts (Feature 11)
 document.addEventListener('keydown', e => {
-  if (e.key === 'n' || e.key === 'N') {
-    if (!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
-      window.location.href = '/add';
-    }
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'n' || e.key === 'N') window.location.href = '/add';
+  if (e.key === 'd' || e.key === 'D') window.location.href = '/';
+  if (e.key === 'j' || e.key === 'J') window.location.href = '/applications';
+  if (e.key === 's' || e.key === 'S') window.location.href = '/stats';
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
   }
 });
+
+// Search history (Feature 12)
+function saveSearchHistory(term) {
+  if (!term || !term.trim()) return;
+  let history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+  history = history.filter(t => t !== term);
+  history.unshift(term);
+  history = history.slice(0, 5);
+  localStorage.setItem('searchHistory', JSON.stringify(history));
+}
+function loadSearchHistory() {
+  const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+  let dl = document.getElementById('search-history-list');
+  if (!dl) {
+    const searchInput = document.querySelector('input[name="search"]');
+    if (!searchInput) return;
+    dl = document.createElement('datalist');
+    dl.id = 'search-history-list';
+    document.body.appendChild(dl);
+    searchInput.setAttribute('list', 'search-history-list');
+    // Save on form submit
+    const form = searchInput.closest('form');
+    if (form) {
+      form.addEventListener('submit', () => {
+        saveSearchHistory(searchInput.value.trim());
+      });
+    }
+  }
+  dl.innerHTML = '';
+  history.forEach(term => {
+    const opt = document.createElement('option');
+    opt.value = term;
+    dl.appendChild(opt);
+  });
+}
+document.addEventListener('DOMContentLoaded', loadSearchHistory);
 </script>
 </body>
 </html>

@@ -4,7 +4,7 @@ import re
 import csv
 import io
 from flask import (Flask, render_template, request, redirect, url_for,
-                   send_from_directory, abort, flash, make_response)
+                   send_from_directory, abort, flash, make_response, jsonify)
 from werkzeug.utils import secure_filename
 from datetime import date, timedelta
 
@@ -86,6 +86,17 @@ def init_db():
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS salary_negotiations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                initial_offer TEXT,
+                counter_offer TEXT,
+                final_amount TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
+            );
         """)
 
         # Add new columns to existing jobs table (SQLite has no IF NOT EXISTS for ALTER)
@@ -99,6 +110,7 @@ def init_db():
             ("resume_version",     "TEXT DEFAULT ''"),
             ("interest_score",     "INTEGER DEFAULT 0"),
             ("next_action",        "TEXT DEFAULT ''"),
+            ("rejection_reason",   "TEXT DEFAULT ''"),
         ]
         for col, typedef in new_cols:
             try:
@@ -148,6 +160,11 @@ DOC_TYPE_LABELS = {
 }
 
 ROUND_OUTCOMES = ["Pending", "Passed", "Failed", "Cancelled", "Unknown"]
+
+REJECTION_REASONS = [
+    "No response", "Salary mismatch", "Skills gap",
+    "Overqualified", "Position filled", "Culture fit", "Other"
+]
 
 
 def slugify(text):
@@ -357,38 +374,48 @@ def index():
     order = request.args.get("order", "desc")
     tag_filter = request.args.get("tag", "")
     starred_only = request.args.get("starred", "") == "1"
+    try:
+        page = max(1, int(request.args.get("page", 1) or 1))
+    except (ValueError, TypeError):
+        page = 1
+    per_page = 20
 
-    query = "SELECT DISTINCT jobs.* FROM jobs"
+    join_clause = ""
+    where_clause = "WHERE 1=1"
     params = []
 
     if tag_filter:
-        query += " JOIN tags ON tags.job_id = jobs.id"
-
-    query += " WHERE 1=1"
+        join_clause = " JOIN tags ON tags.job_id = jobs.id"
 
     if status_filter:
-        query += " AND jobs.status = ?"
+        where_clause += " AND jobs.status = ?"
         params.append(status_filter)
 
     if starred_only:
-        query += " AND jobs.starred = 1"
+        where_clause += " AND jobs.starred = 1"
 
     if search:
-        query += " AND (jobs.company LIKE ? OR jobs.role LIKE ? OR jobs.notes LIKE ? OR jobs.jd LIKE ?)"
+        where_clause += " AND (jobs.company LIKE ? OR jobs.role LIKE ? OR jobs.notes LIKE ? OR jobs.jd LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
 
     if tag_filter:
-        query += " AND tags.name = ?"
+        where_clause += " AND tags.name = ?"
         params.append(tag_filter.lower())
 
     valid_sorts = ["applied_date", "company", "role", "status", "created_at"]
     if sort not in valid_sorts:
         sort = "applied_date"
     order_sql = "DESC" if order == "desc" else "ASC"
-    query += f" ORDER BY jobs.{sort} {order_sql}"
+
+    count_query = f"SELECT COUNT(DISTINCT jobs.id) FROM jobs{join_clause} {where_clause}"
+    data_query = f"SELECT DISTINCT jobs.* FROM jobs{join_clause} {where_clause} ORDER BY jobs.{sort} {order_sql} LIMIT ? OFFSET ?"
+    offset = (page - 1) * per_page
 
     with get_db() as conn:
-        jobs = conn.execute(query, params).fetchall()
+        total_count = conn.execute(count_query, params).fetchone()[0]
+        total_pages = (total_count + per_page - 1) // per_page
+        jobs = conn.execute(data_query, params + [per_page, offset]).fetchall()
+
         counts = {}
         for s in STATUSES:
             counts[s] = conn.execute(
@@ -434,6 +461,9 @@ def index():
         all_tags=all_tags,
         days_ago=days_ago,
         today=today.isoformat(),
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
     )
 
 
@@ -552,7 +582,7 @@ def edit_job(job_id):
                    status=?, source=?, salary_range=?, location=?, notes=?,
                    recruiter_name=?, recruiter_email=?, recruiter_linkedin=?,
                    follow_up_date=?, offer_deadline=?, resume_version=?,
-                   interest_score=?, next_action=?,
+                   interest_score=?, next_action=?, rejection_reason=?,
                    updated_at=datetime('now')
                    WHERE id=?""",
                 (
@@ -574,6 +604,7 @@ def edit_job(job_id):
                     request.form.get("resume_version", ""),
                     int(request.form.get("interest_score") or 0),
                     request.form.get("next_action", ""),
+                    request.form.get("rejection_reason", ""),
                     job_id,
                 ),
             )
@@ -596,6 +627,7 @@ def edit_job(job_id):
         tag_str=tag_str,
         statuses=STATUSES,
         status_labels=STATUS_LABELS,
+        rejection_reasons=REJECTION_REASONS,
         today=date.today().isoformat(),
     )
 
@@ -625,6 +657,10 @@ def job_detail(job_id):
         tags_rows = conn.execute(
             "SELECT name FROM tags WHERE job_id=? ORDER BY name", (job_id,)
         ).fetchall()
+        negotiation = conn.execute(
+            "SELECT * FROM salary_negotiations WHERE job_id=? ORDER BY created_at DESC LIMIT 1",
+            (job_id,)
+        ).fetchone()
 
     tag_names = [t["name"] for t in tags_rows]
 
@@ -641,6 +677,7 @@ def job_detail(job_id):
         doc_types=DOC_TYPES,
         doc_type_labels=DOC_TYPE_LABELS,
         round_outcomes=ROUND_OUTCOMES,
+        negotiation=negotiation,
     )
 
 
@@ -717,16 +754,157 @@ def delete_job(job_id):
 
 
 # ---------------------------------------------------------------------------
+# Quick status update (inline, AJAX)
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/quick-status", methods=["POST"])
+def quick_status(job_id):
+    new_status = request.form.get("new_status")
+    if new_status not in STATUSES:
+        abort(400)
+    with get_db() as conn:
+        old = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if old and old["status"] != new_status:
+            conn.execute(
+                "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
+                (new_status, job_id)
+            )
+            conn.execute(
+                "INSERT INTO timeline (job_id, event, event_date) VALUES (?,?,date('now'))",
+                (job_id, STATUS_LABELS.get(new_status, new_status))
+            )
+    return jsonify({"ok": True, "status": new_status, "label": STATUS_LABELS.get(new_status, new_status)})
+
+
+# ---------------------------------------------------------------------------
+# Clone job
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/clone", methods=["POST"])
+def clone_job(job_id):
+    with get_db() as conn:
+        job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return redirect(url_for("index"))
+        cur = conn.execute(
+            """INSERT INTO jobs (company, role, jd, job_url, applied_date, status, source,
+                              salary_range, location, notes, recruiter_name, recruiter_email,
+                              recruiter_linkedin, resume_version, interest_score, next_action)
+                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (job["company"], job["role"], job["jd"], job["job_url"],
+             date.today().isoformat(), "applied", job["source"],
+             job["salary_range"], job["location"], job["notes"],
+             job["recruiter_name"], job["recruiter_email"], job["recruiter_linkedin"],
+             job["resume_version"], job["interest_score"], job["next_action"])
+        )
+        new_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
+            (new_id, "Applied", date.today().isoformat(), f"Cloned from job #{job_id}")
+        )
+        # copy tags
+        tags = conn.execute("SELECT name FROM tags WHERE job_id=?", (job_id,)).fetchall()
+        for t in tags:
+            conn.execute("INSERT INTO tags (job_id, name) VALUES (?,?)", (new_id, t["name"]))
+    return redirect(url_for("edit_job", job_id=new_id))
+
+
+# ---------------------------------------------------------------------------
+# Print view
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/print")
+def print_job(job_id):
+    with get_db() as conn:
+        job = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return redirect(url_for("index"))
+        timeline = conn.execute(
+            "SELECT * FROM timeline WHERE job_id=? ORDER BY event_date ASC",
+            (job_id,)
+        ).fetchall()
+        documents = conn.execute(
+            "SELECT * FROM documents WHERE job_id=?", (job_id,)
+        ).fetchall()
+        tags = [r["name"] for r in conn.execute(
+            "SELECT name FROM tags WHERE job_id=?", (job_id,)
+        ).fetchall()]
+        rounds = conn.execute(
+            "SELECT * FROM interview_rounds WHERE job_id=? ORDER BY interview_date ASC",
+            (job_id,)
+        ).fetchall()
+    return render_template(
+        "print_job.html",
+        job=job,
+        timeline=timeline,
+        documents=documents,
+        tags=tags,
+        rounds=rounds,
+        status_labels=STATUS_LABELS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Salary negotiation
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/negotiation", methods=["POST"])
+def save_negotiation(job_id):
+    with get_db() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            abort(404)
+        existing = conn.execute(
+            "SELECT id FROM salary_negotiations WHERE job_id=?", (job_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """UPDATE salary_negotiations
+                   SET initial_offer=?, counter_offer=?, final_amount=?, notes=?
+                   WHERE job_id=?""",
+                (
+                    request.form.get("initial_offer", ""),
+                    request.form.get("counter_offer", ""),
+                    request.form.get("final_amount", ""),
+                    request.form.get("notes", ""),
+                    job_id,
+                )
+            )
+        else:
+            conn.execute(
+                """INSERT INTO salary_negotiations
+                   (job_id, initial_offer, counter_offer, final_amount, notes)
+                   VALUES (?,?,?,?,?)""",
+                (
+                    job_id,
+                    request.form.get("initial_offer", ""),
+                    request.form.get("counter_offer", ""),
+                    request.form.get("final_amount", ""),
+                    request.form.get("notes", ""),
+                )
+            )
+    return redirect(url_for("job_detail", job_id=job_id))
+
+
+# ---------------------------------------------------------------------------
 # Star / Unstar
 # ---------------------------------------------------------------------------
 
 @app.route("/job/<int:job_id>/star", methods=["POST"])
 def star_job(job_id):
     with get_db() as conn:
-        job = conn.execute("SELECT starred FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = conn.execute("SELECT starred, company FROM jobs WHERE id=?", (job_id,)).fetchone()
         if job:
             new_val = 0 if job["starred"] else 1
             conn.execute("UPDATE jobs SET starred=? WHERE id=?", (new_val, job_id))
+            company = job["company"]
+            starred = bool(new_val)
+        else:
+            company = ""
+            starred = False
+    # Support both AJAX (returns JSON) and form POST (redirects)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax") or request.args.get("ajax"):
+        return jsonify({"ok": True, "starred": starred, "company": company})
     next_url = request.form.get("next") or request.referrer or url_for("index")
     return redirect(next_url)
 
@@ -823,7 +1001,7 @@ def export_csv():
             SELECT id, company, role, status, applied_date, location, salary_range, source,
                    job_url, notes, recruiter_name, recruiter_email, recruiter_linkedin,
                    follow_up_date, offer_deadline, resume_version, starred,
-                   interest_score, next_action,
+                   interest_score, next_action, rejection_reason,
                    created_at, updated_at
             FROM jobs ORDER BY applied_date DESC
         """).fetchall()
@@ -834,7 +1012,8 @@ def export_csv():
         "ID", "Company", "Role", "Status", "Applied Date", "Location", "Salary Range",
         "Source", "Job URL", "Notes", "Recruiter Name", "Recruiter Email",
         "Recruiter LinkedIn", "Follow Up Date", "Offer Deadline", "Resume Version",
-        "Starred", "Interest Score", "Next Action", "Created At", "Updated At",
+        "Starred", "Interest Score", "Next Action", "Rejection Reason",
+        "Created At", "Updated At",
     ])
     for job in jobs:
         writer.writerow([
@@ -850,6 +1029,7 @@ def export_csv():
             "Yes" if job["starred"] else "No",
             job["interest_score"] or 0,
             job["next_action"] or "",
+            job["rejection_reason"] or "",
             job["created_at"] or "", job["updated_at"] or "",
         ])
 
@@ -1106,6 +1286,46 @@ def stats():
         """).fetchall()
         heatmap_data = {row['applied_date']: row['cnt'] for row in heatmap_rows}
 
+        # Interview funnel / success rate
+        funnel_counts = {}
+        for s in STATUSES:
+            funnel_counts[s] = conn.execute(
+                "SELECT COUNT(*) FROM jobs WHERE status=?", (s,)
+            ).fetchone()[0]
+        reached_interview = (
+            funnel_counts.get("phone_interview", 0) +
+            funnel_counts.get("technical_interview", 0) +
+            funnel_counts.get("final_interview", 0) +
+            funnel_counts.get("offer", 0) +
+            funnel_counts.get("rejected", 0)
+        )
+        interview_to_offer = funnel_counts.get("offer", 0)
+        interview_rate = round(reached_interview / total * 100, 1) if total else 0
+        offer_from_interview = round(
+            interview_to_offer / reached_interview * 100, 1
+        ) if reached_interview else 0
+
+        # Day-of-week stats
+        dow_stats = conn.execute("""
+            SELECT CASE strftime('%w', applied_date)
+                WHEN '0' THEN 'Sun' WHEN '1' THEN 'Mon' WHEN '2' THEN 'Tue'
+                WHEN '3' THEN 'Wed' WHEN '4' THEN 'Thu' WHEN '5' THEN 'Fri' WHEN '6' THEN 'Sat'
+            END as dow,
+            strftime('%w', applied_date) as dow_num,
+            COUNT(*) as cnt
+            FROM jobs WHERE applied_date != ''
+            GROUP BY dow_num ORDER BY dow_num
+        """).fetchall()
+
+        # Rejection breakdown
+        rejection_breakdown = conn.execute("""
+            SELECT COALESCE(NULLIF(rejection_reason, ''), 'Not specified') as reason,
+                   COUNT(*) as cnt
+            FROM jobs WHERE status='rejected'
+            GROUP BY rejection_reason
+            ORDER BY cnt DESC
+        """).fetchall()
+
     counts = {row["status"]: row["cnt"] for row in by_status}
     conversion = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
 
@@ -1137,6 +1357,11 @@ def stats():
         avg_to_response=avg_to_response,
         heatmap_data=heatmap_data,
         heatmap_weeks=heatmap_weeks,
+        interview_rate=interview_rate,
+        offer_from_interview=offer_from_interview,
+        reached_interview=reached_interview,
+        dow_stats=dow_stats,
+        rejection_breakdown=rejection_breakdown,
     )
 
 

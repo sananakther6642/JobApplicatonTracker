@@ -142,7 +142,7 @@
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px">
           {{ status_labels[s] }} <span style="background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:0 6px;font-size:10px">{{ kanban[s]|length }}</span>
         </div>
-        {% for job in kanban[s] %}
+        {% for job in kanban[s][:5] %}
         <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
           <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
                onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
@@ -176,6 +176,33 @@
           </div>
         </a>
         {% endfor %}
+        {% if kanban[s]|length > 5 %}
+        <div id="kanban-more-{{ s }}" style="display:none">
+          {% for job in kanban[s][5:] %}
+          <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
+            <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
+                 onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <span style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</span>
+                  {% if job.starred %}<span style="color:var(--warn)">★</span>{% endif %}
+                </div>
+                <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
+              </div>
+              {% if job.applied_date %}
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
+              </div>
+              {% endif %}
+            </div>
+          </a>
+          {% endfor %}
+        </div>
+        <button onclick="toggleKanbanMore('{{ s }}')" id="kanban-toggle-{{ s }}"
+                class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:8px">
+          Show {{ kanban[s]|length - 5 }} more
+        </button>
+        {% endif %}
       </div>
       {% endif %}
     {% endfor %}
@@ -232,4 +259,15 @@
   </div>
 </div>
 
+<script>
+function toggleKanbanMore(status) {
+  const moreDiv = document.getElementById('kanban-more-' + status);
+  const btn = document.getElementById('kanban-toggle-' + status);
+  if (!moreDiv || !btn) return;
+  const hidden = moreDiv.style.display === 'none';
+  moreDiv.style.display = hidden ? 'block' : 'none';
+  const extra = moreDiv.querySelectorAll('a').length;
+  btn.textContent = hidden ? 'Show less' : 'Show ' + extra + ' more';
+}
+</script>
 {% endblock %}
