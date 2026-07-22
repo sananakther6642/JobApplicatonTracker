@@ -34,7 +34,7 @@
     {% for job in offer_jobs %}
     <tr style="border-bottom:1px solid var(--border);{% if job.id == highest_id %}background:#f0fdf4;{% endif %}transition:background 0.15s"
         onmouseover="this.style.background='{% if job.id == highest_id %}#dcfce7{% else %}var(--bg){% endif %}'"
-        onmouseout="this.style.background='{% if job.id == highest_id %}#f0fdf4{% endif %}'">
+        onmouseout="this.style.background='{% if job.id == highest_id %}#f0fdf4{% else %}var(--white){% endif %}'">
       <td style="padding:12px 14px;font-weight:700">
         {{ job.company }}
         {% if job.id == highest_id %}

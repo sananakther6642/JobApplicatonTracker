@@ -36,6 +36,10 @@
     <div class="kpi-num" style="color:#2563eb">{{ offer_rate }}%</div>
     <div class="kpi-lbl">Offer Rate</div>
   </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#8b5cf6">{{ response_rate }}%</div>
+    <div class="kpi-lbl">Response Rate</div>
+  </div>
 </div>
 
 <!-- Weekly Goal Tracker -->
@@ -237,6 +241,24 @@
       <p style="color:var(--text3);font-size:12px">No data yet.</p>
       {% endif %}
     </div>
+
+    <!-- Monthly chart -->
+    {% if monthly %}
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:12px">Monthly Applications</div>
+      {% set max_m = monthly | map(attribute='cnt') | max %}
+      <div style="display:flex;align-items:flex-end;gap:6px;height:64px">
+        {% for row in monthly | reverse %}
+        {% set h = ((row.cnt / max_m) * 52) | int %}
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <span style="font-size:10px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+          <div style="background:var(--accent);border-radius:2px 2px 0 0;width:100%;min-height:3px;height:{{ h }}px"></div>
+          <span style="font-size:9px;color:var(--text3)">{{ row.month[5:] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Recent Activity -->
     <div class="card" style="padding:16px">
