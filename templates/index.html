@@ -151,7 +151,7 @@ const STATUS_CLASS_MAP = {
         <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
         <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
         <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px"
-                onclick="deleteJob({{ job.id }}, '{{ job.company|replace("'", "\\'") }}')">🗑</button>
+                onclick="deleteJob({{ job.id }}, {{ job.company | tojson | e }})">🗑</button>
       </div>
     </div>
     {% endfor %}
@@ -203,7 +203,7 @@ const STATUS_CLASS_MAP = {
   {% endif %}
 </div>
 <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:8px">
-  Showing {{ (page-1)*20+1 }}–{{ [(page*20), total_count]|min }} of {{ total_count }}
+  Showing {{ (page-1)*per_page+1 }}–{{ [(page*per_page), total_count]|min }} of {{ total_count }}
 </div>
 {% endif %}
 
@@ -250,7 +250,7 @@ function toggleStar(btn, jobId) {
     btn.title = data.starred ? 'Unstar' : 'Star';
     const msg = data.starred ? `★ Starred ${company}` : `Unstarred ${company}`;
     showToast(msg, null, 3000);
-  });
+  }).catch(() => showToast('Request failed — please reload', null, 4000));
 }
 
 // Feature 2: undo delete with toast
@@ -328,13 +328,22 @@ function bulkDelete() {
   function doDelete() {
     if (deleted) return;
     deleted = true;
-    Promise.all(ids.map(id => fetch(`/job/${id}/delete`, { method: 'POST' }))).then(() => {
-      ids.forEach(id => {
-        const card = document.getElementById(`job-card-${id}`);
-        if (card) card.remove();
+    Promise.all(ids.map(id => fetch(`/job/${id}/delete`, { method: 'POST' })))
+      .then(() => {
+        ids.forEach(id => {
+          const card = document.getElementById(`job-card-${id}`);
+          if (card) card.remove();
+        });
+        updateBulkBar();
+      })
+      .catch(() => {
+        ids.forEach(id => {
+          const card = document.getElementById(`job-card-${id}`);
+          if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+        });
+        updateBulkBar();
+        showToast('Delete failed — please try again', null, 4000);
       });
-      updateBulkBar();
-    });
     dismissToast(toast);
   }
 
@@ -407,7 +416,6 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
     body: body.toString()
   }).then(r => r.json()).then(data => {
     if (data.ok) {
-      // Update badge class and text
       badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
       badge.style.cursor = 'pointer';
       badge.style.position = 'relative';
@@ -415,7 +423,7 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
       badge.textContent = data.label;
       badge.setAttribute('title', 'Click to change status');
     }
-  });
+  }).catch(() => showToast('Status update failed — please reload', null, 4000));
 }
 </script>
 

@@ -462,6 +462,7 @@ def index():
         days_ago=days_ago,
         today=today.isoformat(),
         page=page,
+        per_page=per_page,
         total_pages=total_pages,
         total_count=total_count,
     )
@@ -515,7 +516,7 @@ def add_job():
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
                     request.form.get("resume_version", ""),
-                    int(request.form.get("interest_score") or 0),
+                    (lambda x: int(x) if x and x.isdigit() else 0)(request.form.get("interest_score", "")),
                     request.form.get("next_action", ""),
                 ),
             )
@@ -602,7 +603,7 @@ def edit_job(job_id):
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
                     request.form.get("resume_version", ""),
-                    int(request.form.get("interest_score") or 0),
+                    (lambda x: int(x) if x and x.isdigit() else 0)(request.form.get("interest_score", "")),
                     request.form.get("next_action", ""),
                     request.form.get("rejection_reason", ""),
                     job_id,
