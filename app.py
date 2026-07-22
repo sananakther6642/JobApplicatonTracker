@@ -81,6 +81,11 @@ def init_db():
                 name TEXT NOT NULL,
                 FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
         """)
 
         # Add new columns to existing jobs table (SQLite has no IF NOT EXISTS for ALTER)
@@ -92,6 +97,8 @@ def init_db():
             ("offer_deadline",     "TEXT DEFAULT ''"),
             ("starred",            "INTEGER DEFAULT 0"),
             ("resume_version",     "TEXT DEFAULT ''"),
+            ("interest_score",     "INTEGER DEFAULT 0"),
+            ("next_action",        "TEXT DEFAULT ''"),
         ]
         for col, typedef in new_cols:
             try:
@@ -255,6 +262,41 @@ def dashboard():
                       "technical_interview", "final_interview", "offer"]
         ]
 
+        # Interview countdowns
+        upcoming_interviews = {}
+        rows = conn.execute("""
+            SELECT job_id, MIN(interview_date) as next_date
+            FROM interview_rounds
+            WHERE interview_date >= date('now')
+            GROUP BY job_id
+        """).fetchall()
+        for row in rows:
+            try:
+                d = date.fromisoformat(row['next_date'])
+                upcoming_interviews[row['job_id']] = (d - date.today()).days
+            except Exception:
+                pass
+
+        # Next action jobs (To Do list)
+        next_action_jobs = conn.execute("""
+            SELECT * FROM jobs
+            WHERE next_action != '' AND next_action IS NOT NULL
+            AND status NOT IN ('rejected','withdrawn','ghosted','offer')
+            ORDER BY applied_date ASC
+        """).fetchall()
+
+        # Weekly goal
+        monday = date.today() - timedelta(days=date.today().weekday())
+        this_week_count = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE applied_date >= ?",
+            (monday.isoformat(),)
+        ).fetchone()[0]
+
+        goal_row = conn.execute(
+            "SELECT value FROM settings WHERE key='weekly_goal'"
+        ).fetchone()
+        weekly_goal = int(goal_row['value']) if goal_row and goal_row['value'] else None
+
     offer_rate = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
     response_rate = round(
         (total - counts.get("applied", 0) - counts.get("ghosted", 0)) / total * 100, 1
@@ -276,7 +318,31 @@ def dashboard():
         status_labels=STATUS_LABELS,
         status_colors=STATUS_COLORS,
         today=today,
+        upcoming_interviews=upcoming_interviews,
+        next_action_jobs=next_action_jobs,
+        this_week_count=this_week_count,
+        weekly_goal=weekly_goal,
     )
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+@app.route("/settings", methods=["POST"])
+def save_settings():
+    weekly_goal = request.form.get("weekly_goal", "").strip()
+    if weekly_goal:
+        try:
+            weekly_goal = str(int(weekly_goal))
+            with get_db() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES ('weekly_goal', ?)",
+                    (weekly_goal,)
+                )
+        except (ValueError, TypeError):
+            pass
+    return redirect(url_for("dashboard"))
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +406,17 @@ def index():
             "SELECT DISTINCT name FROM tags ORDER BY name"
         ).fetchall()
 
+    # Compute days ago for each job
+    today = date.today()
+    days_ago = {}
+    for job in jobs:
+        if job['applied_date']:
+            try:
+                d = date.fromisoformat(job['applied_date'])
+                days_ago[job['id']] = (today - d).days
+            except Exception:
+                pass
+
     return render_template(
         "index.html",
         jobs=jobs,
@@ -355,6 +432,8 @@ def index():
         starred_only=starred_only,
         tags_by_job=tags_by_job,
         all_tags=all_tags,
+        days_ago=days_ago,
+        today=today.isoformat(),
     )
 
 
@@ -386,8 +465,9 @@ def add_job():
                    (company, role, jd, job_url, applied_date, status, source,
                     salary_range, location, notes,
                     recruiter_name, recruiter_email, recruiter_linkedin,
-                    follow_up_date, offer_deadline, resume_version)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    follow_up_date, offer_deadline, resume_version,
+                    interest_score, next_action)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     company,
                     role,
@@ -405,6 +485,8 @@ def add_job():
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
                     request.form.get("resume_version", ""),
+                    int(request.form.get("interest_score") or 0),
+                    request.form.get("next_action", ""),
                 ),
             )
             job_id = cur.lastrowid
@@ -470,6 +552,7 @@ def edit_job(job_id):
                    status=?, source=?, salary_range=?, location=?, notes=?,
                    recruiter_name=?, recruiter_email=?, recruiter_linkedin=?,
                    follow_up_date=?, offer_deadline=?, resume_version=?,
+                   interest_score=?, next_action=?,
                    updated_at=datetime('now')
                    WHERE id=?""",
                 (
@@ -489,6 +572,8 @@ def edit_job(job_id):
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
                     request.form.get("resume_version", ""),
+                    int(request.form.get("interest_score") or 0),
+                    request.form.get("next_action", ""),
                     job_id,
                 ),
             )
@@ -738,6 +823,7 @@ def export_csv():
             SELECT id, company, role, status, applied_date, location, salary_range, source,
                    job_url, notes, recruiter_name, recruiter_email, recruiter_linkedin,
                    follow_up_date, offer_deadline, resume_version, starred,
+                   interest_score, next_action,
                    created_at, updated_at
             FROM jobs ORDER BY applied_date DESC
         """).fetchall()
@@ -748,7 +834,7 @@ def export_csv():
         "ID", "Company", "Role", "Status", "Applied Date", "Location", "Salary Range",
         "Source", "Job URL", "Notes", "Recruiter Name", "Recruiter Email",
         "Recruiter LinkedIn", "Follow Up Date", "Offer Deadline", "Resume Version",
-        "Starred", "Created At", "Updated At",
+        "Starred", "Interest Score", "Next Action", "Created At", "Updated At",
     ])
     for job in jobs:
         writer.writerow([
@@ -762,6 +848,8 @@ def export_csv():
             job["follow_up_date"] or "", job["offer_deadline"] or "",
             job["resume_version"] or "",
             "Yes" if job["starred"] else "No",
+            job["interest_score"] or 0,
+            job["next_action"] or "",
             job["created_at"] or "", job["updated_at"] or "",
         ])
 
@@ -809,6 +897,160 @@ def salary():
 
 
 # ---------------------------------------------------------------------------
+# Offers comparison
+# ---------------------------------------------------------------------------
+
+@app.route("/offers")
+def offers():
+    with get_db() as conn:
+        offer_jobs = conn.execute(
+            "SELECT * FROM jobs WHERE status='offer' ORDER BY company ASC"
+        ).fetchall()
+
+    # Find highest salary (simple string comparison — best effort)
+    highest_id = None
+    highest_salary = None
+    for job in offer_jobs:
+        sr = job['salary_range'] or ''
+        # Extract first number from salary string
+        nums = re.findall(r'\d[\d,]*', sr.replace('k', '000').replace('K', '000'))
+        if nums:
+            try:
+                val = int(nums[0].replace(',', ''))
+                if highest_salary is None or val > highest_salary:
+                    highest_salary = val
+                    highest_id = job['id']
+            except ValueError:
+                pass
+
+    return render_template(
+        "offers.html",
+        offer_jobs=offer_jobs,
+        highest_id=highest_id,
+        status_labels=STATUS_LABELS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Email templates
+# ---------------------------------------------------------------------------
+
+EMAIL_TEMPLATES = [
+    {
+        "title": "Follow-up After Application",
+        "subject": "Following Up on [ROLE] Application at [COMPANY]",
+        "body": """Hi [RECRUITER_NAME],
+
+I hope this message finds you well. I wanted to follow up on my application for the [ROLE] position at [COMPANY], which I submitted on [DATE].
+
+I remain very excited about this opportunity and believe my background in [YOUR_SKILL/EXPERIENCE] aligns well with what you're looking for. I would love the chance to discuss how I can contribute to your team.
+
+Please let me know if you need any additional information from my side.
+
+Thank you for your time and consideration.
+
+Best regards,
+[YOUR_NAME]
+[YOUR_EMAIL] | [YOUR_PHONE]
+[LINKEDIN_URL]""",
+    },
+    {
+        "title": "Thank You After Phone Screen",
+        "subject": "Thank You — [ROLE] Phone Screen",
+        "body": """Hi [INTERVIEWER_NAME],
+
+Thank you for taking the time to speak with me today about the [ROLE] position at [COMPANY]. It was great to learn more about the team and the exciting work you're doing with [SPECIFIC_PROJECT_OR_TOPIC_DISCUSSED].
+
+Our conversation reinforced my enthusiasm for this opportunity. I'm particularly excited about [SPECIFIC_ASPECT_OF_ROLE] and believe my experience with [RELEVANT_SKILL] would allow me to contribute quickly.
+
+I look forward to the next steps in the process. Please don't hesitate to reach out if you have any questions.
+
+Thank you again,
+[YOUR_NAME]""",
+    },
+    {
+        "title": "Thank You After Technical Interview",
+        "subject": "Thank You — [ROLE] Technical Interview",
+        "body": """Hi [INTERVIEWER_NAME],
+
+Thank you for the technical interview for the [ROLE] role at [COMPANY]. I really enjoyed the conversation and the problem-solving exercise around [TOPIC_DISCUSSED].
+
+I wanted to share a quick follow-up thought on [SPECIFIC_QUESTION_OR_PROBLEM]: [BRIEF_ADDITIONAL_INSIGHT_OR_ALTERNATIVE_APPROACH].
+
+I remain very interested in this role and am excited about the possibility of joining the team. Please let me know if there's anything further you need from me.
+
+Best,
+[YOUR_NAME]""",
+    },
+    {
+        "title": "Thank You After Final Interview",
+        "subject": "Thank You — Final Interview for [ROLE] at [COMPANY]",
+        "body": """Hi [INTERVIEWER_NAME / HIRING_MANAGER],
+
+Thank you so much for the time you and the team invested in today's final interview for the [ROLE] position. It was a pleasure meeting everyone and getting a deeper understanding of [COMPANY]'s vision and the team's goals.
+
+I left the conversation even more excited about this opportunity. The discussion about [KEY_TOPIC] was especially compelling, and I'm confident my experience in [RELEVANT_AREA] positions me well to make an immediate impact.
+
+I look forward to hearing about the next steps. Thank you again for the consideration.
+
+Warm regards,
+[YOUR_NAME]""",
+    },
+    {
+        "title": "Negotiate Offer",
+        "subject": "Re: Offer for [ROLE] at [COMPANY]",
+        "body": """Hi [RECRUITER_NAME],
+
+Thank you so much for the offer to join [COMPANY] as [ROLE] — I'm genuinely excited about this opportunity and the team.
+
+After careful consideration, I'd like to discuss the compensation package. Based on my research into market rates for this role and my [X years] of experience in [KEY_SKILL], I was hoping we could get closer to [TARGET_SALARY].
+
+I'm very enthusiastic about joining the team and confident we can find a number that works for both sides. Is there any flexibility on the base salary? I'm also open to discussing other elements of the package such as [SIGNING_BONUS / EQUITY / PTO / REMOTE_FLEXIBILITY].
+
+I look forward to your thoughts.
+
+Best,
+[YOUR_NAME]""",
+    },
+    {
+        "title": "Decline Offer Politely",
+        "subject": "Re: Offer for [ROLE] at [COMPANY]",
+        "body": """Hi [RECRUITER_NAME],
+
+Thank you so much for the offer to join [COMPANY] as [ROLE]. I genuinely appreciate the time and effort the team put into the interview process, and I have a lot of respect for the work you're doing.
+
+After considerable thought, I've decided to decline the offer at this time. This was a very difficult decision, as I was impressed by everyone I met. Ultimately, [BRIEF_REASON — e.g., "I've accepted a role that aligns more closely with my long-term career goals" or "the timing isn't right for me"].
+
+I hope our paths will cross again in the future, and I wish you and the team continued success.
+
+Thank you again for this opportunity.
+
+Best regards,
+[YOUR_NAME]""",
+    },
+    {
+        "title": "Ask for Feedback After Rejection",
+        "subject": "Request for Feedback — [ROLE] at [COMPANY]",
+        "body": """Hi [RECRUITER_NAME / INTERVIEWER_NAME],
+
+Thank you for letting me know about your decision regarding the [ROLE] position. While I'm disappointed, I appreciate you taking the time to close the loop.
+
+If you're able to share any feedback on my candidacy — particularly regarding areas where I could improve — I would be very grateful. Constructive feedback is invaluable to me as I continue to grow professionally.
+
+Thank you again for the opportunity. I enjoyed learning about [COMPANY] and wish you and the team all the best.
+
+Best regards,
+[YOUR_NAME]""",
+    },
+]
+
+
+@app.route("/email-templates")
+def email_templates():
+    return render_template("email_templates.html", templates=EMAIL_TEMPLATES)
+
+
+# ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
 
@@ -832,8 +1074,53 @@ def stats():
                GROUP BY month ORDER BY month DESC LIMIT 6"""
         ).fetchall()
 
+        # Response rate by source
+        source_stats = conn.execute("""
+            SELECT source,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN status NOT IN ('applied','ghosted') THEN 1 ELSE 0 END) as responded,
+                   SUM(CASE WHEN status = 'offer' THEN 1 ELSE 0 END) as offers
+            FROM jobs WHERE source != '' GROUP BY source ORDER BY total DESC
+        """).fetchall()
+
+        # Average days to first response
+        avg_row = conn.execute("""
+            SELECT AVG(diff) as avg_days FROM (
+                SELECT julianday(t.event_date) - julianday(j.applied_date) as diff
+                FROM timeline t JOIN jobs j ON t.job_id = j.id
+                WHERE t.event NOT IN ('Applied', 'Initial application')
+                AND j.applied_date != ''
+                AND t.event_date != ''
+                AND t.event_date > j.applied_date
+                GROUP BY t.job_id
+                HAVING MIN(julianday(t.event_date) - julianday(j.applied_date)) >= 0
+            )
+        """).fetchone()
+        avg_to_response = round(avg_row['avg_days'], 1) if avg_row and avg_row['avg_days'] else None
+
+        # Heatmap data
+        heatmap_rows = conn.execute("""
+            SELECT applied_date, COUNT(*) as cnt
+            FROM jobs WHERE applied_date != ''
+            GROUP BY applied_date
+        """).fetchall()
+        heatmap_data = {row['applied_date']: row['cnt'] for row in heatmap_rows}
+
     counts = {row["status"]: row["cnt"] for row in by_status}
     conversion = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
+
+    # Generate 52-week grid for heatmap
+    today_d = date.today()
+    start = today_d - timedelta(days=363)
+    # Align to Monday
+    start = start - timedelta(days=start.weekday())
+    heatmap_weeks = []
+    for w in range(52):
+        week = []
+        for d in range(7):
+            day = start + timedelta(days=w * 7 + d)
+            week.append(day.isoformat())
+        heatmap_weeks.append(week)
 
     return render_template(
         "stats.html",
@@ -846,6 +1133,10 @@ def stats():
         conversion=conversion,
         status_labels=STATUS_LABELS,
         status_colors=STATUS_COLORS,
+        source_stats=source_stats,
+        avg_to_response=avg_to_response,
+        heatmap_data=heatmap_data,
+        heatmap_weeks=heatmap_weeks,
     )
 
 

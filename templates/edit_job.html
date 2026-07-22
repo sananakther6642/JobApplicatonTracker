@@ -13,7 +13,7 @@
     </div>
   </div>
 
-  <form method="post" action="{{ url_for('edit_job', job_id=job.id) }}">
+  <form method="post" action="{{ url_for('edit_job', job_id=job.id) }}" id="edit-job-form">
 
     <!-- Status (most important thing to update — top of form) -->
     <div class="card" style="padding:20px 24px;margin-bottom:16px;border-left:3px solid var(--accent)">
@@ -100,6 +100,27 @@
         </div>
       </div>
 
+      <!-- Interest Score -->
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Interest Score</label>
+        <div style="display:flex;gap:4px;align-items:center" id="interest-stars">
+          {% for i in range(1,6) %}
+          <label style="cursor:pointer;font-size:24px;color:{% if job.interest_score and i <= job.interest_score %}#f59e0b{% else %}#e2e8f0{% endif %};transition:color 0.1s" class="interest-star-label">
+            <input type="radio" name="interest_score" value="{{ i }}" {% if job.interest_score and i == job.interest_score %}checked{% endif %} style="display:none">
+            ★
+          </label>
+          {% endfor %}
+          {% set score_names = {1:'Low', 2:'Below average', 3:'Average', 4:'High', 5:'Very high'} %}
+          <span style="font-size:12px;color:var(--text3);margin-left:8px" id="score-label">{{ score_names.get(job.interest_score, 'Not set') }}</span>
+        </div>
+      </div>
+
+      <!-- Next Action -->
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Next Action</label>
+        <input class="form-input" type="text" name="next_action" value="{{ job.next_action or '' }}" placeholder="e.g. Send follow-up email, Prepare for technical interview…">
+      </div>
+
       <div class="form-group" style="margin:0">
         <label class="form-label">Notes</label>
         <textarea class="form-input" name="notes" rows="3">{{ job.notes or '' }}</textarea>
@@ -159,6 +180,41 @@ document.querySelectorAll('input[name="status"]').forEach(radio => {
     radio.nextElementSibling.style.outline = '2px solid currentColor';
     radio.nextElementSibling.style.outlineOffset = '2px';
   });
+});
+
+// Interest score star widget
+(function() {
+  const labels = document.querySelectorAll('.interest-star-label');
+  const scoreLabel = document.getElementById('score-label');
+  const scoreNames = ['', 'Low', 'Below average', 'Average', 'High', 'Very high'];
+  function updateStars(val) {
+    labels.forEach((lbl, idx) => {
+      lbl.style.color = (idx < val) ? '#f59e0b' : '#e2e8f0';
+    });
+    scoreLabel.textContent = val > 0 ? scoreNames[val] : 'Not set';
+  }
+  labels.forEach((lbl, idx) => {
+    lbl.addEventListener('mouseover', () => updateStars(idx + 1));
+    lbl.addEventListener('click', () => {
+      lbl.querySelector('input').checked = true;
+      updateStars(idx + 1);
+    });
+  });
+  document.getElementById('interest-stars').addEventListener('mouseleave', () => {
+    const checked = document.querySelector('input[name="interest_score"]:checked');
+    updateStars(checked ? parseInt(checked.value) : 0);
+  });
+})();
+
+// Feature 13: Confirm before leaving unsaved form
+let formDirty = false;
+document.getElementById('edit-job-form').addEventListener('input', () => formDirty = true);
+document.getElementById('edit-job-form').addEventListener('submit', () => formDirty = false);
+window.addEventListener('beforeunload', e => {
+  if (formDirty) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
 });
 </script>
 

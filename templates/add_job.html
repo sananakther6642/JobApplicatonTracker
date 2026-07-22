@@ -10,7 +10,13 @@
     </div>
   </div>
 
-  <form method="post" action="{{ url_for('add_job') }}" enctype="multipart/form-data">
+  <!-- Draft restored banner -->
+  <div id="draft-banner" style="display:none;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--accent);display:flex;align-items:center;justify-content:space-between">
+    <span>📝 Draft restored from your last session.</span>
+    <button onclick="clearDraft()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;font-weight:600">Clear draft</button>
+  </div>
+
+  <form method="post" action="{{ url_for('add_job') }}" enctype="multipart/form-data" id="add-job-form">
 
     <!-- Job Info -->
     <div class="card" style="padding:24px;margin-bottom:16px">
@@ -77,6 +83,25 @@
           <label class="form-label">Resume Version</label>
           <input class="form-input" type="text" name="resume_version" placeholder="e.g. v3, Senior-focused">
         </div>
+      </div>
+
+      <!-- Interest Score -->
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Interest Score</label>
+        <div style="display:flex;gap:4px;align-items:center" id="interest-stars">
+          {% for i in range(1,6) %}
+          <label style="cursor:pointer;font-size:24px;color:#e2e8f0;transition:color 0.1s" class="interest-star-label">
+            <input type="radio" name="interest_score" value="{{ i }}" style="display:none">
+            ★
+          </label>
+          {% endfor %}
+          <span style="font-size:12px;color:var(--text3);margin-left:8px" id="score-label">Not set</span>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Next Action</label>
+        <input class="form-input" type="text" name="next_action" placeholder="e.g. Send follow-up email, Prepare for technical interview…">
       </div>
 
       <div class="form-group" style="margin-bottom:18px">
@@ -161,5 +186,79 @@ function addRow() {
   `;
   c.appendChild(r);
 }
+
+// Interest score star widget
+(function() {
+  const labels = document.querySelectorAll('.interest-star-label');
+  const scoreLabel = document.getElementById('score-label');
+  const scoreNames = ['', 'Low', 'Below average', 'Average', 'High', 'Very high'];
+  function updateStars(val) {
+    labels.forEach((lbl, idx) => {
+      lbl.style.color = (idx < val) ? '#f59e0b' : '#e2e8f0';
+    });
+    scoreLabel.textContent = val > 0 ? scoreNames[val] : 'Not set';
+  }
+  labels.forEach((lbl, idx) => {
+    lbl.addEventListener('mouseover', () => updateStars(idx + 1));
+    lbl.addEventListener('click', () => {
+      lbl.querySelector('input').checked = true;
+      updateStars(idx + 1);
+    });
+  });
+  document.getElementById('interest-stars').addEventListener('mouseleave', () => {
+    const checked = document.querySelector('input[name="interest_score"]:checked');
+    updateStars(checked ? parseInt(checked.value) : 0);
+  });
+})();
+
+// Feature 13: Confirm before leaving unsaved form
+let formDirty = false;
+document.querySelector('form').addEventListener('input', () => formDirty = true);
+document.querySelector('form').addEventListener('submit', () => formDirty = false);
+window.addEventListener('beforeunload', e => {
+  if (formDirty) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// Feature 14: Auto-save drafts to localStorage
+const DRAFT_KEY = 'job_tracker_draft';
+const fields = ['company','role','source','location','salary_range','notes','job_url','tags','next_action'];
+
+function saveDraft() {
+  const data = {};
+  fields.forEach(f => {
+    const el = document.querySelector(`[name="${f}"]`);
+    if (el) data[f] = el.value;
+  });
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+}
+
+function restoreDraft() {
+  const raw = localStorage.getItem(DRAFT_KEY);
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  let restored = false;
+  fields.forEach(f => {
+    const el = document.querySelector(`[name="${f}"]`);
+    if (el && data[f]) { el.value = data[f]; restored = true; }
+  });
+  if (restored) {
+    document.getElementById('draft-banner').style.display = 'flex';
+  }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  document.getElementById('draft-banner').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', restoreDraft);
+document.getElementById('add-job-form').addEventListener('input', saveDraft);
+document.getElementById('add-job-form').addEventListener('submit', () => {
+  localStorage.removeItem(DRAFT_KEY);
+  formDirty = false;
+});
 </script>
 {% endblock %}

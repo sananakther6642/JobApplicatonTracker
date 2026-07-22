@@ -64,6 +64,7 @@
     top: 0;
     z-index: 100;
     box-shadow: var(--shadow);
+    flex-wrap: wrap;
   }
   .brand { font-weight: 700; font-size: 15px; color: var(--text); margin-right: 16px; display:flex; align-items:center; gap:6px; }
   nav a.nav-link { color: var(--text2); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 7px; transition: all 0.15s; }
@@ -149,6 +150,9 @@
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .form-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
 
+  /* Detail grid — stacks on mobile */
+  .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+
   /* Status colors */
   .s-applied    { background: #eff6ff; color: #1d4ed8; }
   .s-screening  { background: #f5f3ff; color: #6d28d9; }
@@ -185,6 +189,11 @@
   .kpi-num { font-size: 26px; font-weight: 800; line-height: 1; }
   .kpi-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 500; }
 
+  /* Star rating */
+  .star-rating { display: inline-flex; gap: 1px; }
+  .star-rating .star { color: #e2e8f0; font-size: 14px; }
+  .star-rating .star.filled { color: #f59e0b; }
+
   /* Misc */
   .empty { text-align: center; padding: 60px 24px; color: var(--text2); }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
@@ -220,6 +229,38 @@
     align-items: center; gap: 12px;
   }
   #bulk-bar.visible { display: flex; }
+
+  /* Heatmap */
+  .heatmap-grid { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+  .heatmap-week { display: flex; flex-direction: column; gap: 3px; }
+  .heatmap-cell {
+    width: 12px; height: 12px; border-radius: 2px;
+    background: var(--border); cursor: default;
+    transition: opacity 0.1s;
+  }
+  .heatmap-cell:hover { opacity: 0.8; }
+  .heatmap-cell.cnt-0 { background: var(--border); }
+  .heatmap-cell.cnt-1 { background: #bfdbfe; }
+  .heatmap-cell.cnt-2, .heatmap-cell.cnt-3 { background: #3b82f6; }
+  .heatmap-cell.cnt-4plus { background: #1d4ed8; }
+  [data-theme="dark"] .heatmap-cell.cnt-0 { background: #1e293b; }
+  [data-theme="dark"] .heatmap-cell.cnt-1 { background: #1e3a5f; }
+  [data-theme="dark"] .heatmap-cell.cnt-2, [data-theme="dark"] .heatmap-cell.cnt-3 { background: #2563eb; }
+  [data-theme="dark"] .heatmap-cell.cnt-4plus { background: #60a5fa; }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    nav { padding: 0 16px; gap: 2px; height: auto; min-height: 56px; }
+    nav a.nav-link { padding: 5px 8px; font-size: 12px; }
+    .form-row, .form-row.cols3 { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .job-card-row { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
+  }
 </style>
 </head>
 <body>
@@ -229,6 +270,8 @@
   <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">All Jobs</a>
   <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
   <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
+  <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
+  <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
   <span class="spacer"></span>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
   <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
@@ -264,6 +307,15 @@ function toggleDark() {
   const btn = document.getElementById('darkToggle');
   if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
 })();
+
+// Feature 1: Press N to open Add Job
+document.addEventListener('keydown', e => {
+  if (e.key === 'n' || e.key === 'N') {
+    if (!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      window.location.href = '/add';
+    }
+  }
+});
 </script>
 </body>
 </html>

@@ -38,6 +38,36 @@
   </div>
 </div>
 
+<!-- Weekly Goal Tracker -->
+{% if weekly_goal %}
+{% set goal_pct = [(this_week_count / weekly_goal * 100)|int, 100]|min %}
+<div class="card" style="padding:16px 20px;margin-bottom:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:600">
+      Weekly Goal: <span style="color:var(--accent)">{{ this_week_count }}</span> / {{ weekly_goal }} applications
+      {% if this_week_count >= weekly_goal %}<span style="color:var(--success);margin-left:6px">✓ Done!</span>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:6px;align-items:center">
+      <input type="number" name="weekly_goal" value="{{ weekly_goal }}" min="1" max="50"
+             class="form-input" style="width:70px;padding:5px 8px;font-size:12px">
+      <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+    </form>
+  </div>
+  <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
+    <div style="background:{% if goal_pct >= 100 %}var(--success){% else %}var(--accent){% endif %};height:10px;width:{{ goal_pct }}%;border-radius:6px;transition:width 0.3s"></div>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding:16px 20px;margin-bottom:20px;border:1px dashed var(--border2)">
+  <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Set a weekly application goal to track your progress.</div>
+  <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:8px;align-items:center">
+    <input type="number" name="weekly_goal" placeholder="e.g. 10" min="1" max="50"
+           class="form-input" style="width:100px;padding:7px 10px;font-size:13px">
+    <button type="submit" class="btn btn-primary btn-sm">Set Weekly Goal</button>
+  </form>
+</div>
+{% endif %}
+
 {% if deadlines %}
 <!-- Offer Deadlines Alert -->
 <div style="background:var(--danger-light);border:1px solid #fecaca;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
@@ -76,6 +106,24 @@
 </div>
 {% endif %}
 
+<!-- To Do section (next_action jobs) -->
+{% if next_action_jobs %}
+<div class="card" style="padding:16px 20px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px">To Do ({{ next_action_jobs|length }})</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    {% for job in next_action_jobs %}
+    <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+      <span style="font-weight:600;color:var(--text);font-size:13px">{{ job.company }}</span>
+      <span style="color:var(--text3);font-size:12px">→</span>
+      <span style="color:var(--text2);font-size:13px">{{ job.role }}</span>
+      <span style="color:var(--text3);font-size:11px;margin:0 4px">·</span>
+      <span style="color:var(--accent);font-size:12px;font-weight:500">{{ job.next_action }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
 
   <!-- Active Jobs -->
@@ -99,11 +147,23 @@
           <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
                onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
             <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <span style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</span>
                 {% if job.starred %}<span style="color:var(--warn)">★</span>{% endif %}
+                {% if upcoming_interviews.get(job.id) is not none %}
+                {% set days_left = upcoming_interviews[job.id] %}
+                <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;
+                  {% if days_left == 0 %}background:#fef2f2;color:#dc2626
+                  {% elif days_left <= 2 %}background:#fff7ed;color:#c2410c
+                  {% else %}background:#f0fdf4;color:#15803d{% endif %}">
+                  {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}Interview in {{ days_left }}d{% endif %}
+                </span>
+                {% endif %}
               </div>
               <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
+              {% if job.next_action %}
+              <div style="font-size:11px;color:var(--accent);margin-top:3px">→ {{ job.next_action }}</div>
+              {% endif %}
             </div>
             {% if job.applied_date %}
             <div style="text-align:right;flex-shrink:0">

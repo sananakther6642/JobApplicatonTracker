@@ -3,6 +3,14 @@
 
 {% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
 
+{% macro render_stars(score) %}
+<span class="star-rating" title="{{ score }}/5">
+  {% for i in range(1,6) %}
+  <span class="star {% if i <= score %}filled{% endif %}">★</span>
+  {% endfor %}
+</span>
+{% endmacro %}
+
 {% block content %}
 
 <div class="page-header">
@@ -65,7 +73,8 @@
 <form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
   <div style="display:flex;flex-direction:column;gap:8px">
     {% for job in jobs %}
-    <div class="card" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
+    {% set d_ago = days_ago.get(job.id) %}
+    <div class="card job-card-row" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
       <!-- Checkbox -->
       <input type="checkbox" name="job_ids" value="{{ job.id }}"
              class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
@@ -82,6 +91,9 @@
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:15px">{{ job.company }}</span>
+          {% if job.interest_score and job.interest_score > 0 %}
+          {{ render_stars(job.interest_score) }}
+          {% endif %}
           <span class="badge {{ status_class(job.status) }}">{{ status_labels[job.status] }}</span>
           {% if tags_by_job.get(job.id) %}
           <span style="display:flex;gap:4px;flex-wrap:wrap">
@@ -96,10 +108,21 @@
           {% if job.location %} · <span style="color:var(--text3)">{{ job.location }}</span>{% endif %}
           {% if job.salary_range %} · <span style="color:var(--text3)">{{ job.salary_range }}</span>{% endif %}
         </div>
+        {% if job.next_action %}
+        <div style="font-size:11px;color:var(--accent);margin-top:3px">→ {{ job.next_action }}</div>
+        {% endif %}
       </div>
 
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;color:var(--text2)">{{ job.applied_date or '—' }}</div>
+        <div style="font-size:12px;color:var(--text2)">
+          {{ job.applied_date or '—' }}
+          {% if d_ago is not none %}
+          <span style="font-size:11px;font-weight:600;margin-left:4px;
+            {% if d_ago <= 7 %}color:#16a34a{% elif d_ago <= 14 %}color:#d97706{% else %}color:#dc2626{% endif %}">
+            ({{ d_ago }}d ago)
+          </span>
+          {% endif %}
+        </div>
         {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
         {% if job.offer_deadline %}
         <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
