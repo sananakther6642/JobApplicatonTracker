@@ -80,13 +80,12 @@
              class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
              onchange="updateBulkBar()">
 
-      <!-- Star -->
-      <form method="post" action="{{ url_for('star_job', job_id=job.id) }}" style="margin:0;flex-shrink:0">
-        <input type="hidden" name="next" value="{{ request.url }}">
-        <button type="submit" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}">
-          {{ '★' if job.starred else '☆' }}
-        </button>
-      </form>
+      <!-- Star (fetch to avoid nested form) -->
+      <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
+              data-starred="{{ '1' if job.starred else '0' }}"
+              onclick="toggleStar(this, {{ job.id }})">
+        {{ '★' if job.starred else '☆' }}
+      </button>
 
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px;flex-wrap:wrap">
@@ -132,10 +131,8 @@
       <div style="display:flex;gap:6px;flex-shrink:0">
         <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
         <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
-        <form method="post" action="{{ url_for('delete_job', job_id=job.id) }}" style="margin:0"
-              onsubmit="return confirm('Delete {{ job.company }} — {{ job.role }}?')">
-          <button type="submit" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px">🗑</button>
-        </form>
+        <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px"
+                onclick="deleteJob({{ job.id }}, '{{ job.company|replace("'", "\\'") }} — {{ job.role|replace("'", "\\'") }}')">🗑</button>
       </div>
     </div>
     {% endfor %}
@@ -183,6 +180,27 @@ function updateBulkBar() {
 function toggleAll(cb) {
   document.querySelectorAll('.job-cb').forEach(c => c.checked = cb.checked);
   updateBulkBar();
+}
+function toggleStar(btn, jobId) {
+  fetch(`/job/${jobId}/star`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'next='
+  }).then(() => {
+    const starred = btn.dataset.starred === '1';
+    btn.textContent = starred ? '☆' : '★';
+    btn.dataset.starred = starred ? '0' : '1';
+    btn.title = starred ? 'Star' : 'Unstar';
+  });
+}
+function deleteJob(jobId, label) {
+  if (!confirm('Delete ' + label + '?')) return;
+  fetch(`/job/${jobId}/delete`, { method: 'POST' })
+    .then(() => {
+      const card = document.querySelector(`input[value="${jobId}"].job-cb`)?.closest('.job-card-row');
+      if (card) card.remove();
+      updateBulkBar();
+    });
 }
 </script>
 
