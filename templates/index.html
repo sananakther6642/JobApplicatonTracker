@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}All Jobs — Job Tracker{% endblock %}
+
+{% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ counts.total }})</span></h1>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
+</div>
+
+<!-- Search + filter bar -->
+<form method="get" action="{{ url_for('index') }}">
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <input type="text" name="search" value="{{ current_search }}"
+           placeholder="Search company, role…"
+           class="form-input" style="flex:1;min-width:180px;padding:8px 12px">
+    <select name="sort" class="form-input" style="width:160px">
+      <option value="applied_date" {% if current_sort=='applied_date' %}selected{% endif %}>Date Applied</option>
+      <option value="company"      {% if current_sort=='company' %}selected{% endif %}>Company</option>
+      <option value="status"       {% if current_sort=='status' %}selected{% endif %}>Status</option>
+    </select>
+    <select name="order" class="form-input" style="width:130px">
+      <option value="desc" {% if current_order=='desc' %}selected{% endif %}>Newest First</option>
+      <option value="asc"  {% if current_order=='asc' %}selected{% endif %}>Oldest First</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">Search</button>
+    {% if current_search or current_status %}
+    <a href="{{ url_for('index') }}" class="btn btn-ghost">Clear</a>
+    {% endif %}
+  </div>
+
+  <!-- Status pills -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+    <a href="{{ url_for('index', search=current_search, sort=current_sort, order=current_order) }}"
+       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);text-decoration:none;{% if not current_status %}background:var(--text);color:var(--white);border-color:var(--text);{% endif %}">
+      All ({{ counts.total }})
+    </a>
+    {% for s in statuses %}
+    <a href="{{ url_for('index', status=s, search=current_search, sort=current_sort, order=current_order) }}"
+       class="badge {{ status_class(s) }}"
+       style="text-decoration:none;{% if current_status == s %}outline:2px solid currentColor;outline-offset:2px;{% endif %}">
+      {{ status_labels[s] }} {{ counts.get(s,0) }}
+    </a>
+    {% endfor %}
+  </div>
+</form>
+
+{% if jobs %}
+<div style="display:flex;flex-direction:column;gap:8px">
+  {% for job in jobs %}
+  <div class="card" style="padding:16px 20px;display:flex;align-items:center;gap:16px">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
+        <span style="font-weight:700;font-size:15px">{{ job.company }}</span>
+        <span class="badge {{ status_class(job.status) }}">{{ status_labels[job.status] }}</span>
+      </div>
+      <div style="color:var(--text2);font-size:13px">{{ job.role }}{% if job.location %} · <span style="color:var(--text3)">{{ job.location }}</span>{% endif %}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div style="font-size:12px;color:var(--text2)">{{ job.applied_date or '—' }}</div>
+      {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
+      <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+      <form method="post" action="{{ url_for('delete_job', job_id=job.id) }}" style="margin:0"
+            onsubmit="return confirm('Delete {{ job.company }} — {{ job.role }}?')">
+        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <div class="empty-icon">📭</div>
+  <p>No applications found.</p>
+  {% if not current_search and not current_status %}
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary" style="margin-top:12px">Add your first job</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

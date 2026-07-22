@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Stats — Job Tracker{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Stats</h1>
+</div>
+
+<div class="kpi-grid" style="grid-template-columns:repeat(6,1fr)">
+  <div class="kpi"><div class="kpi-num">{{ total }}</div><div class="kpi-lbl">Total</div></div>
+  <div class="kpi"><div class="kpi-num" style="color:#16a34a">{{ counts.get('offer',0) }}</div><div class="kpi-lbl">Offers</div></div>
+  <div class="kpi"><div class="kpi-num" style="color:#dc2626">{{ counts.get('rejected',0) }}</div><div class="kpi-lbl">Rejected</div></div>
+  <div class="kpi"><div class="kpi-num" style="color:#64748b">{{ counts.get('ghosted',0) }}</div><div class="kpi-lbl">Ghosted</div></div>
+  <div class="kpi"><div class="kpi-num" style="color:#2563eb">{{ conversion }}%</div><div class="kpi-lbl">Offer Rate</div></div>
+  <div class="kpi"><div class="kpi-num" style="color:#d97706">{{ counts.get('phone_interview',0)+counts.get('technical_interview',0)+counts.get('final_interview',0) }}</div><div class="kpi-lbl">Interviewing</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  <div class="card" style="padding:20px 24px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">By Status</div>
+    {% for row in by_status %}
+    {% set pct = ((row.cnt / total * 100) | int) if total > 0 else 0 %}
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>{{ status_labels.get(row.status, row.status) }}</span>
+        <span style="color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+        <div style="background:{{ status_colors.get(row.status,'#2563eb') }};height:6px;width:{{ pct }}%;border-radius:4px"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div>
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Monthly Applications</div>
+      {% if monthly %}
+      {% set max_m = monthly | map(attribute='cnt') | max %}
+      <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
+        {% for row in monthly | reverse %}
+        {% set h = ((row.cnt / max_m) * 68) | int %}
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+          <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+          <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
+          <span style="font-size:10px;color:var(--text3)">{{ row.month[5:] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="color:var(--text3);font-size:13px">No data yet.</p>
+      {% endif %}
+    </div>
+
+    {% if by_source %}
+    <div class="card" style="padding:20px 24px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px">Top Sources</div>
+      {% for row in by_source %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span>{{ row.source }}</span>
+        <span style="color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

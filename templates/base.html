@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Job Tracker{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --white: #ffffff;
+    --border: #e2e8f0;
+    --border2: #cbd5e1;
+    --text: #0f172a;
+    --text2: #64748b;
+    --text3: #94a3b8;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --warn: #d97706;
+    --warn-light: #fffbeb;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Nav */
+  nav {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .brand { font-weight: 700; font-size: 15px; color: var(--text); margin-right: 16px; display:flex; align-items:center; gap:6px; }
+  nav a.nav-link { color: var(--text2); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 7px; transition: all 0.15s; }
+  nav a.nav-link:hover { color: var(--text); background: var(--bg); text-decoration: none; }
+  nav a.nav-link.active { color: var(--accent); background: var(--accent-light); }
+  .spacer { flex: 1; }
+
+  /* Layout */
+  .container { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .page-header h1 { font-size: 20px; font-weight: 700; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 8px 16px; border-radius: 8px; border: none;
+    cursor: pointer; font-size: 13px; font-weight: 500;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { text-decoration: none; filter: brightness(0.95); }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(37,99,235,.3); }
+  .btn-secondary { background: var(--white); color: var(--text); border: 1px solid var(--border2); box-shadow: var(--shadow); }
+  .btn-danger { background: var(--danger-light); color: var(--danger); border: 1px solid #fecaca; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-ghost { background: none; color: var(--text2); border: none; box-shadow: none; padding: 5px 8px; }
+  .btn-ghost:hover { color: var(--text); background: var(--bg); filter: none; }
+
+  /* Cards */
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 10px; border-radius: 99px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  /* Forms */
+  .form-group { margin-bottom: 18px; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .form-input {
+    width: 100%; padding: 9px 12px;
+    background: var(--white); border: 1px solid var(--border2);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    font-family: inherit; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  textarea.form-input { resize: vertical; min-height: 80px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* Status colors */
+  .s-applied    { background: #eff6ff; color: #1d4ed8; }
+  .s-screening  { background: #f5f3ff; color: #6d28d9; }
+  .s-phone      { background: #fffbeb; color: #b45309; }
+  .s-technical  { background: #fff7ed; color: #c2410c; }
+  .s-final      { background: #fdf2f8; color: #9d174d; }
+  .s-offer      { background: #f0fdf4; color: #15803d; }
+  .s-rejected   { background: #fef2f2; color: #b91c1c; }
+  .s-withdrawn  { background: #f8fafc; color: #475569; }
+  .s-ghosted    { background: #f8fafc; color: #64748b; }
+
+  /* Timeline */
+  .timeline { list-style: none; padding-left: 20px; position: relative; }
+  .timeline::before { content: ''; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: var(--border); border-radius: 2px; }
+  .timeline li { position: relative; margin-bottom: 18px; }
+  .timeline li::before { content: ''; position: absolute; left: -17px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--white); box-shadow: 0 0 0 2px var(--accent); }
+  .t-date { font-size: 11px; color: var(--text3); font-weight: 500; }
+  .t-event { font-weight: 600; font-size: 13px; margin-top: 1px; }
+  .t-note { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* Stat boxes */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; box-shadow: var(--shadow); }
+  .kpi-num { font-size: 26px; font-weight: 800; line-height: 1; }
+  .kpi-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 500; }
+
+  /* Misc */
+  .empty { text-align: center; padding: 60px 24px; color: var(--text2); }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .text-muted { color: var(--text2); }
+  .text-sm { font-size: 12px; }
+
+  details summary { cursor: pointer; list-style: none; user-select: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: '▸ '; font-size: 10px; }
+  details[open] summary::before { content: '▾ '; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">🗂 Job Tracker</span>
+  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
+  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">All Jobs</a>
+  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+  <span class="spacer"></span>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
+</nav>
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>

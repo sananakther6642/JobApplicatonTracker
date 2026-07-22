@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Add Job — Job Tracker{% endblock %}
+{% block content %}
+
+<div style="max-width:640px;margin:0 auto">
+  <div class="page-header">
+    <div>
+      <a href="{{ url_for('index') }}" style="font-size:12px;color:var(--text2)">← All Jobs</a>
+      <h1 style="margin-top:4px">Add Application</h1>
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('add_job') }}" enctype="multipart/form-data">
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Info</div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Company *</label>
+          <input class="form-input" type="text" name="company" required placeholder="e.g. Google">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Role *</label>
+          <input class="form-input" type="text" name="role" required placeholder="e.g. Senior SWE">
+        </div>
+      </div>
+
+      <div class="form-row cols3" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Date Applied</label>
+          <input class="form-input" type="date" name="applied_date" value="{{ today }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Status</label>
+          <select class="form-input" name="status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if s=='applied' %}selected{% endif %}>{{ status_labels[s] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Source</label>
+          <input class="form-input" type="text" name="source" placeholder="LinkedIn, Referral…">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Location</label>
+          <input class="form-input" type="text" name="location" placeholder="Remote / San Francisco">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Salary Range</label>
+          <input class="form-input" type="text" name="salary_range" placeholder="$120k – $160k">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Job URL</label>
+        <input class="form-input" type="url" name="job_url" placeholder="https://…">
+      </div>
+
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" name="notes" rows="3" placeholder="Referral name, key requirements, prep notes…"></textarea>
+      </div>
+    </div>
+
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Description</div>
+      <div class="form-group" style="margin:0">
+        <textarea class="form-input" name="jd" rows="10" placeholder="Paste the full job description here…"></textarea>
+      </div>
+    </div>
+
+    <div class="card" style="padding:24px;margin-bottom:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px">Documents</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Auto-named as <code style="background:var(--bg);padding:1px 6px;border-radius:4px;font-size:11px">company_role_type.pdf</code></p>
+
+      <div id="upload-rows">
+        <div class="upload-row" style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
+          <input type="file" name="documents" accept=".pdf,.doc,.docx,.txt"
+                 style="flex:1;padding:7px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+          <select name="doc_types"
+                  style="width:150px;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+            {% for dt in doc_types %}<option value="{{ dt }}">{{ doc_type_labels[dt] }}</option>{% endfor %}
+          </select>
+          <button type="button" onclick="addRow()" class="btn btn-secondary btn-sm">+ More</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button type="submit" class="btn btn-primary" style="padding:10px 24px">Save Application</button>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary" style="padding:10px 20px">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+function addRow() {
+  const c = document.getElementById('upload-rows');
+  const r = document.createElement('div');
+  r.className = 'upload-row';
+  r.style.cssText = 'display:flex;gap:10px;margin-bottom:10px;align-items:center';
+  r.innerHTML = `
+    <input type="file" name="documents" accept=".pdf,.doc,.docx,.txt"
+           style="flex:1;padding:7px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+    <select name="doc_types" style="width:150px;padding:8px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px">
+      {% for dt in doc_types %}<option value="{{ dt }}">{{ doc_type_labels[dt] }}</option>{% endfor %}
+    </select>
+    <button type="button" onclick="this.closest('.upload-row').remove()"
+            style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:4px 8px">✕</button>
+  `;
+  c.appendChild(r);
+}
+</script>
+{% endblock %}

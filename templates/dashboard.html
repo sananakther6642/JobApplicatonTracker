@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Job Tracker{% endblock %}
+
+{% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-num">{{ total }}</div>
+    <div class="kpi-lbl">Applied</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#d97706">{{ counts.get('phone_interview',0) + counts.get('technical_interview',0) + counts.get('final_interview',0) }}</div>
+    <div class="kpi-lbl">Interviewing</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#16a34a">{{ counts.get('offer',0) }}</div>
+    <div class="kpi-lbl">Offers</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#dc2626">{{ counts.get('rejected',0) }}</div>
+    <div class="kpi-lbl">Rejected</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#64748b">{{ counts.get('ghosted',0) }}</div>
+    <div class="kpi-lbl">Ghosted</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-num" style="color:#2563eb">{{ offer_rate }}%</div>
+    <div class="kpi-lbl">Offer Rate</div>
+  </div>
+</div>
+
+{% if followups %}
+<!-- Follow-up Alert -->
+<div style="background:var(--warn-light);border:1px solid #fcd34d;border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
+  <div style="font-weight:600;font-size:13px;color:var(--warn);margin-bottom:10px">⏰ Follow up on {{ followups|length }} application{{ 's' if followups|length > 1 else '' }} (7+ days, no response)</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for job in followups %}
+    <a href="{{ url_for('job_detail', job_id=job.id) }}"
+       style="background:var(--white);border:1px solid #fcd34d;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
+      <strong>{{ job.company }}</strong>
+      <span style="color:var(--text2)">{{ job.role }}</span>
+      <span style="color:var(--text3)">· {{ job.applied_date }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
+
+  <!-- Active Jobs (Kanban-lite: just a clean list grouped by status) -->
+  <div>
+    <h2 style="font-size:14px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Active Pipeline</h2>
+    {% set active_statuses = ['phone_interview','technical_interview','final_interview','screening','applied'] %}
+    {% set has_active = namespace(v=false) %}
+    {% for s in active_statuses %}
+      {% if kanban[s] %}{% set has_active.v = true %}{% endif %}
+    {% endfor %}
+
+    {% if has_active.v %}
+    {% for s in active_statuses %}
+      {% if kanban[s] %}
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text2);margin-bottom:8px">
+          {{ status_labels[s] }} <span style="background:var(--bg);border:1px solid var(--border);border-radius:99px;padding:0 6px;font-size:10px">{{ kanban[s]|length }}</span>
+        </div>
+        {% for job in kanban[s] %}
+        <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
+               onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</div>
+              <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
+            </div>
+            {% if job.applied_date %}
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
+              {% if job.location %}
+              <div style="font-size:11px;color:var(--text3)">{{ job.location }}</div>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% else %}
+    <div class="card" style="padding:32px;text-align:center">
+      <div style="font-size:32px;margin-bottom:8px">🚀</div>
+      <p style="color:var(--text2);margin-bottom:12px">No active applications yet.</p>
+      <a href="{{ url_for('add_job') }}" class="btn btn-primary">Add your first job</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: funnel + activity -->
+  <div>
+    <!-- Funnel -->
+    <div class="card" style="padding:16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:12px">Funnel</div>
+      {% if total > 0 %}
+      {% for label, cnt, color in funnel %}
+      {% set pct = (cnt / total * 100) | round(0) | int %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span style="color:var(--text2)">{{ label }}</span>
+          <span style="font-weight:600">{{ cnt }}</span>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:5px;overflow:hidden">
+          <div style="background:{{ color }};height:5px;width:{{ pct }}%;border-radius:4px"></div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p style="color:var(--text3);font-size:12px">No data yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card" style="padding:16px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:12px">Recent Activity</div>
+      {% if activity %}
+      {% for ev in activity[:8] %}
+      <div style="display:flex;gap:10px;margin-bottom:10px;font-size:12px">
+        <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+        <div>
+          <a href="{{ url_for('job_detail', job_id=ev.job_id) }}" style="font-weight:600;color:var(--text)">{{ ev.company }}</a>
+          <span style="color:var(--text2)"> — {{ ev.event }}</span>
+          <div style="color:var(--text3)">{{ ev.event_date or '' }}</div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p style="color:var(--text3);font-size:12px">No activity yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

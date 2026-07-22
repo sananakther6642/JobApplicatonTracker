@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ job.company }} — {{ job.role }}{% endblock %}
+
+{% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px">
+  <div>
+    <a href="{{ url_for('index') }}" style="font-size:12px;color:var(--text2)">← All Jobs</a>
+    <h1 style="font-size:22px;font-weight:800;margin-top:6px">{{ job.company }}</h1>
+    <div style="color:var(--text2);font-size:15px;margin-top:2px">{{ job.role }}</div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+    <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary">✏ Edit</a>
+    <form method="post" action="{{ url_for('delete_job', job_id=job.id) }}"
+          onsubmit="return confirm('Delete this application? This cannot be undone.')">
+      <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+
+  <!-- Left: details + JD + docs -->
+  <div>
+
+    <!-- Meta card -->
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <span class="badge {{ status_class(job.status) }}" style="font-size:12px;padding:5px 14px">{{ status_labels[job.status] }}</span>
+        {% if job.applied_date %}<span style="color:var(--text2);font-size:13px">Applied {{ job.applied_date }}</span>{% endif %}
+        {% if job.job_url %}
+        <a href="{{ job.job_url }}" target="_blank" style="margin-left:auto;font-size:12px;color:var(--accent)">🔗 Job Posting</a>
+        {% endif %}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Location</div>
+          <div style="font-size:14px">{{ job.location or '—' }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Salary</div>
+          <div style="font-size:14px">{{ job.salary_range or '—' }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Source</div>
+          <div style="font-size:14px">{{ job.source or '—' }}</div>
+        </div>
+      </div>
+
+      {% if job.notes %}
+      <hr class="divider">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px">Notes</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap">{{ job.notes }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Documents -->
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">Documents</div>
+        <button onclick="toggleUpload()" class="btn btn-secondary btn-sm">+ Upload</button>
+      </div>
+
+      {% if documents %}
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+        {% for doc in documents %}
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
+          <span>{% if doc.filename.endswith('.pdf') %}📄{% else %}📎{% endif %}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ doc.filename }}</div>
+            <div style="font-size:11px;color:var(--text2)">{{ doc_type_labels.get(doc.doc_type, doc.doc_type) }} · {{ doc.uploaded_at[:10] }}</div>
+          </div>
+          <a href="{{ url_for('serve_upload', filename=doc.filename) }}" target="_blank" class="btn btn-secondary btn-sm">Open</a>
+          <form method="post" action="{{ url_for('delete_doc', doc_id=doc.id) }}" onsubmit="return confirm('Delete file?')" style="margin:0">
+            <button type="submit" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="font-size:13px;color:var(--text2);margin-bottom:10px">No documents yet.</p>
+      {% endif %}
+
+      <div id="upload-panel" style="display:none;padding-top:12px;border-top:1px solid var(--border)">
+        <form method="post" action="{{ url_for('upload_doc', job_id=job.id) }}" enctype="multipart/form-data">
+          <div id="upload-rows-detail">
+            <div class="upload-row" style="display:flex;gap:8px;margin-bottom:8px">
+              <input type="file" name="documents" accept=".pdf,.doc,.docx,.txt"
+                     style="flex:1;padding:6px;background:var(--white);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px">
+              <select name="doc_types"
+                      style="width:140px;padding:7px;background:var(--white);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px">
+                {% for dt in doc_types %}<option value="{{ dt }}">{{ doc_type_labels[dt] }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button type="button" onclick="addDetailRow()" class="btn btn-ghost btn-sm">+ More</button>
+            <button type="submit" class="btn btn-primary btn-sm">Upload</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- JD -->
+    {% if job.jd %}
+    <div class="card" style="padding:20px 24px">
+      <details>
+        <summary style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:0;outline:none">
+          Job Description
+        </summary>
+        <div style="margin-top:12px;font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;max-height:400px;overflow-y:auto">{{ job.jd }}</div>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right: timeline -->
+  <div>
+    <div class="card" style="padding:20px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Timeline</div>
+
+      {% if timeline %}
+      <ul class="timeline" style="margin-bottom:20px">
+        {% for event in timeline %}
+        <li>
+          <div class="t-date">{{ event.event_date or '' }}</div>
+          <div class="t-event">{{ event.event }}</div>
+          {% if event.notes %}<div class="t-note">{{ event.notes }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <hr class="divider" style="margin:0 0 16px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Add Event</div>
+      <form method="post" action="{{ url_for('add_event', job_id=job.id) }}">
+        <div class="form-group">
+          <input class="form-input" type="text" name="event" required placeholder="e.g. Phone Screen, Offer…" style="font-size:13px">
+        </div>
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Date</label>
+            <input class="form-input" type="date" name="event_date" style="font-size:13px">
+          </div>
+          <div></div>
+        </div>
+        <div class="form-group">
+          <textarea class="form-input" name="notes" rows="2" placeholder="Notes…" style="font-size:13px"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Add to Timeline</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleUpload() {
+  const p = document.getElementById('upload-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+function addDetailRow() {
+  const c = document.getElementById('upload-rows-detail');
+  const r = document.createElement('div');
+  r.className = 'upload-row';
+  r.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+  r.innerHTML = `
+    <input type="file" name="documents" accept=".pdf,.doc,.docx,.txt"
+           style="flex:1;padding:6px;background:var(--white);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px">
+    <select name="doc_types" style="width:140px;padding:7px;background:var(--white);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px">
+      {% for dt in doc_types %}<option value="{{ dt }}">{{ doc_type_labels[dt] }}</option>{% endfor %}
+    </select>
+    <button type="button" onclick="this.closest('.upload-row').remove()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+  `;
+  c.appendChild(r);
+}
+</script>
+{% endblock %}
