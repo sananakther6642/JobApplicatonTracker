@@ -1,4 +1,4 @@
-# Job Tracker
+# JAT — Job Application Tracker
 
 Local job application tracker built with Flask + SQLite. Runs entirely on your machine — no cloud, no accounts.
 
