@@ -277,7 +277,10 @@
 </head>
 <body>
 <nav>
-  <span class="brand">🗂 Job Tracker</span>
+  <span class="brand" style="flex-direction:column;align-items:flex-start;gap:1px;line-height:1">
+    <span style="font-size:17px;font-weight:800;letter-spacing:-.5px;color:var(--accent)">JAT</span>
+    <span style="font-size:9px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Job Application Tracker</span>
+  </span>
   <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" title="Dashboard (D)">Dashboard</a>
   <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" title="All Jobs (J)">All Jobs</a>
   <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}" title="Stats (S)">Stats</a>
