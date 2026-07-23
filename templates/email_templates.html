@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Email Templates — Job Tracker{% endblock %}
+{% block title %}Email Templates — JAT{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <h1>Email Templates</h1>
-  <span style="font-size:13px;color:var(--text2)">Click [PLACEHOLDERS] to fill in your details</span>
+  <span style="font-size:13px;color:var(--text2)">Click <span style="background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> to fill in your details</span>
 </div>
 
 <div style="display:flex;flex-direction:column;gap:16px">
@@ -12,33 +12,151 @@
   <div class="card" style="padding:20px 24px" id="tpl-{{ loop.index }}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap">
       <div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:4px">{{ tpl.title }}</div>
-        <div style="font-size:12px;color:var(--text2)">
-          Subject: <span style="font-style:italic;color:var(--text)">{{ tpl.subject }}</span>
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px">{{ tpl.title }}</div>
+        <div style="font-size:12px;color:var(--text2)">Subject:
+          <span id="subj-rendered-{{ loop.index }}"
+                style="font-style:italic;color:var(--text)"></span>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0">
         <button onclick="copySubject({{ loop.index }})" class="btn btn-ghost btn-sm" id="copy-subj-{{ loop.index }}">📋 Copy Subject</button>
         <button onclick="copyBody({{ loop.index }})" class="btn btn-secondary btn-sm" id="copy-body-{{ loop.index }}">📋 Copy Body</button>
+        <button onclick="resetTemplate({{ loop.index }})" class="btn btn-ghost btn-sm" title="Reset placeholders">↺ Reset</button>
       </div>
     </div>
 
     <details>
       <summary style="font-size:12px;font-weight:600;color:var(--text2);outline:none">Show template body</summary>
       <div style="margin-top:12px">
-        <pre id="tpl-body-{{ loop.index }}" style="font-family:inherit;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto">{{ tpl.body }}</pre>
-        <div style="margin-top:8px;font-size:11px;color:var(--text3)">Replace <span style="background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> with your actual information.</div>
+        <div id="tpl-body-{{ loop.index }}"
+             style="font-family:inherit;font-size:13px;line-height:1.9;color:var(--text);white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto"></div>
       </div>
     </details>
 
-    <span style="display:none" id="tpl-subj-{{ loop.index }}">{{ tpl.subject }}</span>
+    {# raw data for JS — hidden #}
+    <span style="display:none" id="tpl-raw-subj-{{ loop.index }}">{{ tpl.subject }}</span>
+    <span style="display:none" id="tpl-raw-body-{{ loop.index }}">{{ tpl.body }}</span>
   </div>
   {% endfor %}
 </div>
 
+<style>
+.ph {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent);
+  white-space: nowrap;
+}
+.ph:hover { opacity: .8; }
+.ph-input {
+  background: var(--white);
+  color: var(--text);
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  min-width: 60px;
+}
+</style>
+
 <script>
+// Store raw templates
+const RAW_SUBJECTS = {};
+const RAW_BODIES = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[id^="tpl-raw-subj-"]').forEach(el => {
+    const idx = el.id.replace('tpl-raw-subj-', '');
+    RAW_SUBJECTS[idx] = el.textContent;
+    RAW_BODIES[idx] = document.getElementById('tpl-raw-body-' + idx).textContent;
+    renderTemplate(idx);
+  });
+});
+
+function renderTemplate(idx) {
+  renderInto('subj-rendered-' + idx, RAW_SUBJECTS[idx], true);
+  renderInto('tpl-body-' + idx, RAW_BODIES[idx], false);
+}
+
+function renderInto(containerId, text, inline) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  // Split on [PLACEHOLDER] pattern
+  const parts = text.split(/(\[[A-Z0-9_ /—–-]+\])/g);
+  container.innerHTML = '';
+  parts.forEach(part => {
+    if (/^\[[A-Z0-9_ /—–-]+\]$/.test(part)) {
+      const span = document.createElement('span');
+      span.className = 'ph';
+      span.textContent = part;
+      span.title = 'Click to fill in';
+      span.addEventListener('click', () => activatePlaceholder(span, containerId));
+      container.appendChild(span);
+    } else {
+      container.appendChild(document.createTextNode(part));
+    }
+  });
+}
+
+function activatePlaceholder(span, containerId) {
+  const input = document.createElement('input');
+  input.className = 'ph-input';
+  input.value = '';
+  input.placeholder = span.textContent.replace(/^\[|\]$/g, '');
+  input.size = Math.max(input.placeholder.length, 8);
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const val = input.value.trim();
+    const replacement = document.createElement('span');
+    if (val) {
+      replacement.style.cssText = 'color:var(--success);font-weight:600';
+      replacement.textContent = val;
+    } else {
+      replacement.className = 'ph';
+      replacement.textContent = '[' + input.placeholder + ']';
+      replacement.title = 'Click to fill in';
+      replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
+    }
+    input.replaceWith(replacement);
+    if (val) {
+      // re-wire remaining placeholders in same container so they still work
+      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
+        ph.replaceWith(ph.cloneNode(true)); // re-clone to clear old listeners
+      });
+      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
+        ph.addEventListener('click', () => activatePlaceholder(ph, containerId));
+      });
+    }
+  }
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { input.value = ''; commit(); }
+  });
+}
+
+function resetTemplate(idx) {
+  renderTemplate(String(idx));
+}
+
+function getPlainText(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return '';
+  return el.innerText;
+}
+
 function copySubject(idx) {
-  const text = document.getElementById('tpl-subj-' + idx).textContent;
+  const text = getPlainText('subj-rendered-' + idx);
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-subj-' + idx);
     btn.textContent = '✓ Copied';
@@ -47,7 +165,7 @@ function copySubject(idx) {
 }
 
 function copyBody(idx) {
-  const text = document.getElementById('tpl-body-' + idx).textContent;
+  const text = getPlainText('tpl-body-' + idx);
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-body-' + idx);
     btn.textContent = '✓ Copied';
