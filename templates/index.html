@@ -3,18 +3,27 @@
 
 {% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
 
+{% macro render_stars(score) %}
+<span class="star-rating" title="{{ score }}/5">
+  {% for i in range(1,6) %}
+  <span class="star {% if i <= score %}filled{% endif %}">★</span>
+  {% endfor %}
+</span>
+{% endmacro %}
+
 {% block content %}
 
 <div class="page-header">
-  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ counts.total }})</span></h1>
+  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ total_count }})</span></h1>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
 </div>
 
 <!-- Search + filter bar -->
-<form method="get" action="{{ url_for('index') }}">
+<form method="get" action="{{ url_for('index') }}" id="filter-form">
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <input type="text" name="search" value="{{ current_search }}"
-           placeholder="Search company, role…"
+           placeholder="Search company, role, JD…"
+           id="search-input"
            class="form-input" style="flex:1;min-width:180px;padding:8px 12px">
     <select name="sort" class="form-input" style="width:160px">
       <option value="applied_date" {% if current_sort=='applied_date' %}selected{% endif %}>Date Applied</option>
@@ -26,15 +35,15 @@
       <option value="asc"  {% if current_order=='asc' %}selected{% endif %}>Oldest First</option>
     </select>
     <button type="submit" class="btn btn-secondary">Search</button>
-    {% if current_search or current_status %}
+    {% if current_search or current_status or current_tag or starred_only %}
     <a href="{{ url_for('index') }}" class="btn btn-ghost">Clear</a>
     {% endif %}
   </div>
 
-  <!-- Status pills -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+  <!-- Status pills + starred + tags -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
     <a href="{{ url_for('index', search=current_search, sort=current_sort, order=current_order) }}"
-       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);text-decoration:none;{% if not current_status %}background:var(--text);color:var(--white);border-color:var(--text);{% endif %}">
+       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);text-decoration:none;{% if not current_status and not starred_only and not current_tag %}background:var(--text);color:var(--white);border-color:var(--text);{% endif %}">
       All ({{ counts.total }})
     </a>
     {% for s in statuses %}
@@ -44,43 +53,381 @@
       {{ status_labels[s] }} {{ counts.get(s,0) }}
     </a>
     {% endfor %}
+    <a href="{{ url_for('index', starred='1', search=current_search, sort=current_sort, order=current_order) }}"
+       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);text-decoration:none;color:var(--warn);{% if starred_only %}background:#fffbeb;border-color:#fcd34d;{% endif %}">
+      ★ Starred ({{ counts.get('starred',0) }})
+    </a>
+    {% if all_tags %}
+    <span style="color:var(--text3);font-size:11px;margin-left:4px">Tags:</span>
+    {% for tag in all_tags %}
+    <a href="{{ url_for('index', tag=tag.name, sort=current_sort, order=current_order) }}"
+       class="tag-pill"
+       style="{% if current_tag == tag.name %}outline:2px solid var(--accent);outline-offset:1px;{% endif %}">
+      #{{ tag.name }}
+    </a>
+    {% endfor %}
+    {% endif %}
   </div>
 </form>
 
+<!-- All statuses JSON for inline dropdown -->
+<script>
+const ALL_STATUSES = {{ statuses | tojson }};
+const STATUS_LABELS_MAP = {{ status_labels | tojson }};
+const STATUS_CLASS_MAP = {
+  applied:'s-applied',screening:'s-screening',phone_interview:'s-phone',
+  technical_interview:'s-technical',final_interview:'s-final',offer:'s-offer',
+  rejected:'s-rejected',withdrawn:'s-withdrawn',ghosted:'s-ghosted'
+};
+</script>
+
 {% if jobs %}
-<div style="display:flex;flex-direction:column;gap:8px">
-  {% for job in jobs %}
-  <div class="card" style="padding:16px 20px;display:flex;align-items:center;gap:16px">
-    <div style="flex:1;min-width:0">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
-        <span style="font-weight:700;font-size:15px">{{ job.company }}</span>
-        <span class="badge {{ status_class(job.status) }}">{{ status_labels[job.status] }}</span>
+<form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    {% for job in jobs %}
+    {% set d_ago = days_ago.get(job.id) %}
+    <div class="card job-card-row" id="job-card-{{ job.id }}" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
+      <!-- Checkbox -->
+      <input type="checkbox" name="job_ids" value="{{ job.id }}"
+             class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
+             onchange="updateBulkBar()">
+
+      <!-- Star (fetch to avoid nested form) -->
+      <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
+              data-starred="{{ '1' if job.starred else '0' }}"
+              data-company="{{ job.company | e }}"
+              onclick="toggleStar(this, {{ job.id }})">
+        {{ '★' if job.starred else '☆' }}
+      </button>
+
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:15px">{{ job.company }}</span>
+          {% if job.interest_score and job.interest_score > 0 %}
+          {{ render_stars(job.interest_score) }}
+          {% endif %}
+          <!-- Inline status badge — clickable -->
+          <span class="badge {{ status_class(job.status) }} status-badge"
+                style="cursor:pointer;position:relative"
+                data-job-id="{{ job.id }}"
+                data-status="{{ job.status }}"
+                title="Click to change status"
+                onclick="openStatusDropdown(event, this)">{{ status_labels[job.status] }}</span>
+          {% if tags_by_job.get(job.id) %}
+          <span style="display:flex;gap:4px;flex-wrap:wrap">
+            {% for tag in tags_by_job[job.id] %}
+            <a href="{{ url_for('index', tag=tag) }}" class="tag-pill">#{{ tag }}</a>
+            {% endfor %}
+          </span>
+          {% endif %}
+        </div>
+        <div style="color:var(--text2);font-size:13px">
+          {{ job.role }}
+          {% if job.location %} · <span style="color:var(--text3)">{{ job.location }}</span>{% endif %}
+          {% if job.salary_range %} · <span style="color:var(--text3)">{{ job.salary_range }}</span>{% endif %}
+        </div>
+        {% if job.next_action %}
+        <div style="font-size:11px;color:var(--accent);margin-top:3px">→ {{ job.next_action }}</div>
+        {% endif %}
       </div>
-      <div style="color:var(--text2);font-size:13px">{{ job.role }}{% if job.location %} · <span style="color:var(--text3)">{{ job.location }}</span>{% endif %}</div>
+
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:var(--text2)">
+          {{ job.applied_date or '—' }}
+          {% if d_ago is not none %}
+          <span style="font-size:11px;font-weight:600;margin-left:4px;
+            {% if d_ago <= 7 %}color:#16a34a{% elif d_ago <= 14 %}color:#d97706{% else %}color:#dc2626{% endif %}">
+            ({{ d_ago }}d ago)
+          </span>
+          {% endif %}
+        </div>
+        {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
+        {% if job.offer_deadline %}
+        <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
+        {% endif %}
+      </div>
+
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
+        <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+        <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px"
+                onclick="deleteJob({{ job.id }}, {{ job.company | tojson | e }})">🗑</button>
+      </div>
     </div>
-    <div style="text-align:right;flex-shrink:0">
-      <div style="font-size:12px;color:var(--text2)">{{ job.applied_date or '—' }}</div>
-      {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
-    </div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
-      <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
-      <form method="post" action="{{ url_for('delete_job', job_id=job.id) }}" style="margin:0"
-            onsubmit="return confirm('Delete {{ job.company }} — {{ job.role }}?')">
-        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-      </form>
-    </div>
+    {% endfor %}
   </div>
+
+  <!-- Bulk action bar -->
+  <div id="bulk-bar">
+    <label style="font-size:13px;font-weight:600;color:var(--text2)">
+      <input type="checkbox" id="select-all" onchange="toggleAll(this)" style="margin-right:6px">
+      Select all
+    </label>
+    <span id="selected-count" style="font-size:13px;color:var(--text2)">0 selected</span>
+    <select name="new_status" class="form-input" style="width:180px;padding:7px 10px">
+      {% for s in statuses %}
+      <option value="{{ s }}">→ {{ status_labels[s] }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm" id="bulk-submit-btn">Update jobs</button>
+    <button type="button" class="btn btn-danger btn-sm" id="bulk-delete-btn" onclick="bulkDelete()">🗑 Delete selected</button>
+  </div>
+</form>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:24px;flex-wrap:wrap">
+  {% set base_args = {'search': current_search, 'status': current_status, 'sort': current_sort, 'order': current_order, 'tag': current_tag, 'starred': '1' if starred_only else ''} %}
+  {% if page > 1 %}
+  <a href="{{ url_for('index', page=page-1, **base_args) }}" class="btn btn-secondary btn-sm">← Prev</a>
+  {% else %}
+  <span class="btn btn-secondary btn-sm" style="opacity:.4;pointer-events:none">← Prev</span>
+  {% endif %}
+
+  {% for p in range(1, total_pages+1) %}
+    {% if p == 1 or p == total_pages or (p >= page-2 and p <= page+2) %}
+    <a href="{{ url_for('index', page=p, **base_args) }}"
+       style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;font-size:13px;font-weight:{% if p==page %}700{% else %}500{% endif %};
+              {% if p==page %}background:var(--accent);color:#fff;text-decoration:none{% else %}background:var(--white);border:1px solid var(--border2);color:var(--text2);text-decoration:none{% endif %}">
+      {{ p }}
+    </a>
+    {% elif p == page-3 or p == page+3 %}
+    <span style="color:var(--text3);font-size:13px">…</span>
+    {% endif %}
   {% endfor %}
+
+  {% if page < total_pages %}
+  <a href="{{ url_for('index', page=page+1, **base_args) }}" class="btn btn-secondary btn-sm">Next →</a>
+  {% else %}
+  <span class="btn btn-secondary btn-sm" style="opacity:.4;pointer-events:none">Next →</span>
+  {% endif %}
 </div>
+<div style="text-align:center;font-size:12px;color:var(--text3);margin-top:8px">
+  Showing {{ (page-1)*per_page+1 }}–{{ [(page*per_page), total_count]|min }} of {{ total_count }}
+</div>
+{% endif %}
+
 {% else %}
 <div class="empty">
   <div class="empty-icon">📭</div>
   <p>No applications found.</p>
-  {% if not current_search and not current_status %}
+  {% if not current_search and not current_status and not current_tag %}
   <a href="{{ url_for('add_job') }}" class="btn btn-primary" style="margin-top:12px">Add your first job</a>
   {% endif %}
 </div>
 {% endif %}
+
+<script>
+function updateBulkBar() {
+  const cbs = document.querySelectorAll('.job-cb:checked');
+  const bar = document.getElementById('bulk-bar');
+  const cnt = document.getElementById('selected-count');
+  const btn = document.getElementById('bulk-submit-btn');
+  if (cbs.length > 0) {
+    bar.classList.add('visible');
+    cnt.textContent = cbs.length + ' selected';
+    btn.textContent = 'Update ' + cbs.length + ' job' + (cbs.length > 1 ? 's' : '');
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+function toggleAll(cb) {
+  document.querySelectorAll('.job-cb').forEach(c => c.checked = cb.checked);
+  updateBulkBar();
+}
+
+// Feature 10: star with toast
+function toggleStar(btn, jobId) {
+  const starred = btn.dataset.starred === '1';
+  const company = btn.dataset.company || '';
+  fetch(`/job/${jobId}/star`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'ajax=1'
+  }).then(r => r.json()).then(data => {
+    btn.textContent = data.starred ? '★' : '☆';
+    btn.dataset.starred = data.starred ? '1' : '0';
+    btn.title = data.starred ? 'Unstar' : 'Star';
+    const msg = data.starred ? `★ Starred ${company}` : `Unstarred ${company}`;
+    showToast(msg, null, 3000);
+  }).catch(() => showToast('Request failed — please reload', null, 4000));
+}
+
+// Feature 2: undo delete with toast
+function deleteJob(jobId, company) {
+  const card = document.getElementById(`job-card-${jobId}`);
+  if (!card) return;
+  // Hide card immediately
+  card.style.transition = 'opacity 0.2s';
+  card.style.opacity = '0.4';
+  card.style.pointerEvents = 'none';
+
+  let deleteTimer = null;
+  let deleted = false;
+
+  const toast = showToast(`Deleted <strong>${company}</strong>`, null, null);
+
+  function doDelete() {
+    if (deleted) return;
+    deleted = true;
+    fetch(`/job/${jobId}/delete`, { method: 'POST' })
+      .then(() => { card.remove(); updateBulkBar(); })
+      .catch(() => {
+        card.style.opacity = '1';
+        card.style.pointerEvents = '';
+        showToast('Delete failed — please try again', null, 4000);
+      });
+    dismissToast(toast);
+  }
+
+  function undoDelete() {
+    if (deleted) return;
+    if (deleteTimer) clearTimeout(deleteTimer);
+    card.style.opacity = '1';
+    card.style.pointerEvents = '';
+    dismissToast(toast);
+  }
+
+  // Add undo button to existing toast
+  const undoBtn = toast.querySelector('.toast-undo') || (() => {
+    const b = document.createElement('button');
+    b.className = 'toast-undo';
+    b.textContent = 'Undo';
+    // Insert before close button
+    const closeBtn = toast.querySelector('.toast-close');
+    toast.insertBefore(b, closeBtn);
+    return b;
+  })();
+  // Re-build toast with undo
+  const msgSpan = toast.querySelector('span');
+  if (msgSpan) msgSpan.innerHTML = `Deleted <strong>${company}</strong>`;
+  undoBtn.onclick = undoDelete;
+
+  deleteTimer = setTimeout(doDelete, 5000);
+  toast._timer = deleteTimer;
+  toast._undoCallback = undoDelete;
+}
+
+function bulkDelete() {
+  const ids = [...document.querySelectorAll('.job-cb:checked')].map(c => c.value);
+  if (!ids.length) return;
+
+  // Hide cards immediately
+  ids.forEach(id => {
+    const card = document.getElementById(`job-card-${id}`);
+    if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+  });
+
+  let deleted = false;
+  const label = `${ids.length} job${ids.length > 1 ? 's' : ''}`;
+  const toast = showToast(`Deleted <strong>${label}</strong>`, null, null);
+
+  const undoBtn = document.createElement('button');
+  undoBtn.className = 'toast-undo';
+  undoBtn.textContent = 'Undo';
+  const closeBtn = toast.querySelector('.toast-close');
+  toast.insertBefore(undoBtn, closeBtn);
+
+  function doDelete() {
+    if (deleted) return;
+    deleted = true;
+    Promise.all(ids.map(id => fetch(`/job/${id}/delete`, { method: 'POST' })))
+      .then(() => {
+        ids.forEach(id => {
+          const card = document.getElementById(`job-card-${id}`);
+          if (card) card.remove();
+        });
+        updateBulkBar();
+      })
+      .catch(() => {
+        ids.forEach(id => {
+          const card = document.getElementById(`job-card-${id}`);
+          if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+        });
+        updateBulkBar();
+        showToast('Delete failed — please try again', null, 4000);
+      });
+    dismissToast(toast);
+  }
+
+  function undoBulk() {
+    if (deleted) return;
+    clearTimeout(deleteTimer);
+    ids.forEach(id => {
+      const card = document.getElementById(`job-card-${id}`);
+      if (card) { card.style.opacity = '1'; card.style.pointerEvents = ''; }
+    });
+    dismissToast(toast);
+  }
+
+  undoBtn.onclick = undoBulk;
+  let deleteTimer = setTimeout(doDelete, 5000);
+  toast._timer = deleteTimer;
+}
+
+// Feature 1: Inline status dropdown
+function openStatusDropdown(e, badge) {
+  e.stopPropagation();
+  // Remove any existing dropdown
+  document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
+
+  const jobId = badge.dataset.jobId;
+  const currentStatus = badge.dataset.status;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'status-dropdown';
+
+  ALL_STATUSES.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'status-dropdown-item';
+    btn.textContent = STATUS_LABELS_MAP[s] || s;
+    if (s === currentStatus) {
+      btn.style.fontWeight = '700';
+      btn.style.color = 'var(--accent)';
+    }
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      changeStatus(jobId, s, badge, dropdown);
+    };
+    dropdown.appendChild(btn);
+  });
+
+  // Position relative to badge
+  const rect = badge.getBoundingClientRect();
+  dropdown.style.position = 'fixed';
+  dropdown.style.top = (rect.bottom + 4) + 'px';
+  dropdown.style.left = rect.left + 'px';
+  document.body.appendChild(dropdown);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closeDD(ev) {
+      if (!dropdown.contains(ev.target)) {
+        dropdown.remove();
+        document.removeEventListener('click', closeDD);
+      }
+    });
+  }, 0);
+}
+
+function changeStatus(jobId, newStatus, badge, dropdown) {
+  dropdown.remove();
+  const body = new URLSearchParams({ new_status: newStatus });
+  fetch(`/job/${jobId}/quick-status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: body.toString()
+  }).then(r => r.json()).then(data => {
+    if (data.ok) {
+      badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
+      badge.style.cursor = 'pointer';
+      badge.style.position = 'relative';
+      badge.dataset.status = data.status;
+      badge.textContent = data.label;
+      badge.setAttribute('title', 'Click to change status');
+    }
+  }).catch(() => showToast('Status update failed — please reload', null, 4000));
+}
+</script>
 
 {% endblock %}

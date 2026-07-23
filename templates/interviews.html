@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Interview Rounds — {{ job.company }}{% endblock %}
+
+{% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
+
+{% block content %}
+
+<div style="max-width:720px;margin:0 auto">
+  <div class="page-header">
+    <div>
+      <a href="{{ url_for('job_detail', job_id=job.id) }}" style="font-size:12px;color:var(--text2)">← {{ job.company }} / {{ job.role }}</a>
+      <h1 style="margin-top:4px">Interview Rounds</h1>
+    </div>
+  </div>
+
+  {% if rounds %}
+  <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+    {% for round in rounds %}
+    <div class="card" style="padding:20px 24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-weight:700;font-size:16px">{{ round.round_name }}</span>
+          {% if round.interview_date %}
+          <span style="font-size:13px;color:var(--text3)">{{ round.interview_date }}</span>
+          {% endif %}
+          {% if round.outcome %}
+          <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;
+            {% if round.outcome == 'Passed' %}background:var(--success-light);color:var(--success)
+            {% elif round.outcome == 'Failed' %}background:var(--danger-light);color:var(--danger)
+            {% else %}background:var(--bg);color:var(--text2){% endif %}">
+            {{ round.outcome }}
+          </span>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('delete_round', job_id=job.id, round_id=round.id) }}"
+              onsubmit="return confirm('Delete this round?')" style="margin:0">
+          <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </div>
+      {% if round.notes %}
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px;white-space:pre-wrap">{{ round.notes }}</div>
+      {% endif %}
+      {% if round.questions_asked %}
+      <hr class="divider" style="margin:10px 0">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px">Questions Asked</div>
+      <div style="font-size:13px;color:var(--text2);white-space:pre-wrap">{{ round.questions_asked }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="padding:40px;text-align:center;margin-bottom:24px">
+    <div style="font-size:36px;margin-bottom:8px">🎤</div>
+    <p style="color:var(--text2)">No interview rounds logged yet.</p>
+  </div>
+  {% endif %}
+
+  <!-- Add round form -->
+  <div class="card" style="padding:24px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Add Interview Round</div>
+    <form method="post" action="{{ url_for('interviews', job_id=job.id) }}">
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Round Name *</label>
+          <input class="form-input" type="text" name="round_name" required placeholder="Phone Screen, Technical Round 1…">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Date</label>
+          <input class="form-input" type="date" name="interview_date" value="{{ today }}">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Outcome</label>
+          <select class="form-input" name="outcome">
+            {% for o in round_outcomes %}
+            <option value="{{ o }}">{{ o }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" name="notes" rows="3" placeholder="How it went, who you spoke with, key takeaways…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Questions Asked</label>
+        <textarea class="form-input" name="questions_asked" rows="5" placeholder="List questions you were asked (one per line)…"></textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary">Add Round</button>
+        <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

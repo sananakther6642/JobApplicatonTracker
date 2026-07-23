@@ -13,7 +13,7 @@
     </div>
   </div>
 
-  <form method="post" action="{{ url_for('edit_job', job_id=job.id) }}">
+  <form method="post" action="{{ url_for('edit_job', job_id=job.id) }}" id="edit-job-form">
 
     <!-- Status (most important thing to update — top of form) -->
     <div class="card" style="padding:20px 24px;margin-bottom:16px;border-left:3px solid var(--accent)">
@@ -23,7 +23,7 @@
         <label style="cursor:pointer">
           <input type="radio" name="status" value="{{ s }}"
                  {% if s == job.status %}checked{% endif %}
-                 style="display:none" onchange="document.querySelectorAll('.status-pill').forEach(p=>p.classList.remove('selected'));this.nextElementSibling.classList.add('selected')">
+                 style="display:none">
           <span class="badge status-pill {{ status_class(s) }}"
                 style="cursor:pointer;border:2px solid transparent;padding:5px 12px;font-size:12px;transition:all 0.15s{% if s == job.status %};outline:2px solid currentColor;outline-offset:2px{% endif %}">
             {{ status_labels[s] }}
@@ -34,6 +34,17 @@
       <div>
         <label class="form-label">Note about this change (added to timeline)</label>
         <input class="form-input" type="text" name="status_note" placeholder="e.g. Got rejection email · Recruiter reached out · Passed phone screen">
+      </div>
+
+      <!-- Rejection reason — shown when rejected is selected -->
+      <div id="rejection-reason-row" style="margin-top:14px;display:{% if job.status == 'rejected' %}block{% else %}none{% endif %}">
+        <label class="form-label">Rejection Reason</label>
+        <select class="form-input" name="rejection_reason">
+          <option value="">— Select reason —</option>
+          {% for r in rejection_reasons %}
+          <option value="{{ r }}" {% if job.rejection_reason == r %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
       </div>
     </div>
 
@@ -78,9 +89,73 @@
         </div>
       </div>
 
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Follow-up Date</label>
+          <input class="form-input" type="date" name="follow_up_date" value="{{ job.follow_up_date or '' }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Offer Deadline</label>
+          <input class="form-input" type="date" name="offer_deadline" value="{{ job.offer_deadline or '' }}">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Resume Version</label>
+          <input class="form-input" type="text" name="resume_version" value="{{ job.resume_version or '' }}" placeholder="e.g. v3, Senior-focused">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Tags <span style="font-weight:400;text-transform:none">(comma-separated)</span></label>
+          <input class="form-input" type="text" name="tags" value="{{ tag_str }}" placeholder="remote, fintech, startup">
+        </div>
+      </div>
+
+      <!-- Interest Score -->
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Interest Score</label>
+        <div style="display:flex;gap:4px;align-items:center" id="interest-stars">
+          {% for i in range(1,6) %}
+          <label style="cursor:pointer;font-size:24px;color:{% if job.interest_score and i <= job.interest_score %}#f59e0b{% else %}#e2e8f0{% endif %};transition:color 0.1s" class="interest-star-label">
+            <input type="radio" name="interest_score" value="{{ i }}" {% if job.interest_score and i == job.interest_score %}checked{% endif %} style="display:none">
+            ★
+          </label>
+          {% endfor %}
+          {% set score_names = {1:'Low', 2:'Below average', 3:'Average', 4:'High', 5:'Very high'} %}
+          <span style="font-size:12px;color:var(--text3);margin-left:8px" id="score-label">{{ score_names.get(job.interest_score, 'Not set') }}</span>
+        </div>
+      </div>
+
+      <!-- Next Action -->
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Next Action</label>
+        <input class="form-input" type="text" name="next_action" value="{{ job.next_action or '' }}" placeholder="e.g. Send follow-up email, Prepare for technical interview…">
+      </div>
+
       <div class="form-group" style="margin:0">
         <label class="form-label">Notes</label>
         <textarea class="form-input" name="notes" rows="3">{{ job.notes or '' }}</textarea>
+      </div>
+    </div>
+
+    <!-- Contact -->
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Contact</div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Name</label>
+          <input class="form-input" type="text" name="recruiter_name" value="{{ job.recruiter_name or '' }}" placeholder="Jane Smith">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Email</label>
+          <input class="form-input" type="email" name="recruiter_email" value="{{ job.recruiter_email or '' }}" placeholder="jane@company.com">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Recruiter LinkedIn</label>
+        <input class="form-input" type="url" name="recruiter_linkedin" value="{{ job.recruiter_linkedin or '' }}" placeholder="https://linkedin.com/in/…">
       </div>
     </div>
 
@@ -104,7 +179,6 @@
 </div>
 
 <script>
-// Highlight selected status pill on page load
 document.querySelectorAll('input[name="status"]').forEach(radio => {
   if (radio.checked) {
     radio.nextElementSibling.style.outline = '2px solid currentColor';
@@ -116,7 +190,45 @@ document.querySelectorAll('input[name="status"]').forEach(radio => {
     });
     radio.nextElementSibling.style.outline = '2px solid currentColor';
     radio.nextElementSibling.style.outlineOffset = '2px';
+    // Show rejection reason field when rejected is selected
+    const rejRow = document.getElementById('rejection-reason-row');
+    if (rejRow) rejRow.style.display = radio.value === 'rejected' ? 'block' : 'none';
   });
+});
+
+// Interest score star widget
+(function() {
+  const labels = document.querySelectorAll('.interest-star-label');
+  const scoreLabel = document.getElementById('score-label');
+  const scoreNames = ['', 'Low', 'Below average', 'Average', 'High', 'Very high'];
+  function updateStars(val) {
+    labels.forEach((lbl, idx) => {
+      lbl.style.color = (idx < val) ? '#f59e0b' : '#e2e8f0';
+    });
+    scoreLabel.textContent = val > 0 ? scoreNames[val] : 'Not set';
+  }
+  labels.forEach((lbl, idx) => {
+    lbl.addEventListener('mouseover', () => updateStars(idx + 1));
+    lbl.addEventListener('click', () => {
+      lbl.querySelector('input').checked = true;
+      updateStars(idx + 1);
+    });
+  });
+  document.getElementById('interest-stars').addEventListener('mouseleave', () => {
+    const checked = document.querySelector('input[name="interest_score"]:checked');
+    updateStars(checked ? parseInt(checked.value) : 0);
+  });
+})();
+
+// Feature 13: Confirm before leaving unsaved form
+let formDirty = false;
+document.getElementById('edit-job-form').addEventListener('input', () => formDirty = true);
+document.getElementById('edit-job-form').addEventListener('submit', () => formDirty = false);
+window.addEventListener('beforeunload', e => {
+  if (formDirty) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
 });
 </script>
 

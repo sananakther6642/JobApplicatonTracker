@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,8 +25,29 @@
     --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
   }
+
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --white: #1e293b;
+    --border: #334155;
+    --border2: #475569;
+    --text: #f1f5f9;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --accent: #3b82f6;
+    --accent-light: #1e3a5f;
+    --danger: #ef4444;
+    --danger-light: #3b1111;
+    --success: #22c55e;
+    --success-light: #0f2e1a;
+    --warn: #f59e0b;
+    --warn-light: #2d1e00;
+    --shadow: 0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; transition: background 0.2s, color 0.2s; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
@@ -43,12 +64,27 @@
     top: 0;
     z-index: 100;
     box-shadow: var(--shadow);
+    flex-wrap: wrap;
   }
   .brand { font-weight: 700; font-size: 15px; color: var(--text); margin-right: 16px; display:flex; align-items:center; gap:6px; }
   nav a.nav-link { color: var(--text2); font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 7px; transition: all 0.15s; }
   nav a.nav-link:hover { color: var(--text); background: var(--bg); text-decoration: none; }
   nav a.nav-link.active { color: var(--accent); background: var(--accent-light); }
   .spacer { flex: 1; }
+
+  /* Dark mode toggle */
+  .dark-toggle {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 5px 9px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text2);
+    margin-right: 8px;
+    transition: all 0.15s;
+  }
+  .dark-toggle:hover { background: var(--bg); color: var(--text); }
 
   /* Layout */
   .container { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
@@ -70,6 +106,14 @@
   .btn-ghost { background: none; color: var(--text2); border: none; box-shadow: none; padding: 5px 8px; }
   .btn-ghost:hover { color: var(--text); background: var(--bg); filter: none; }
 
+  /* Star button */
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; padding: 2px 6px; line-height: 1;
+    transition: transform 0.1s;
+  }
+  .star-btn:hover { transform: scale(1.2); }
+
   /* Cards */
   .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 
@@ -80,6 +124,17 @@
     font-size: 11px; font-weight: 600;
     letter-spacing: 0.2px;
   }
+
+  /* Tag pills */
+  .tag-pill {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 11px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+    border: 1px solid var(--border);
+    text-decoration: none;
+  }
+  .tag-pill:hover { text-decoration: none; filter: brightness(0.95); }
 
   /* Forms */
   .form-group { margin-bottom: 18px; }
@@ -95,6 +150,9 @@
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .form-row.cols3 { grid-template-columns: 1fr 1fr 1fr; }
 
+  /* Detail grid — stacks on mobile */
+  .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+
   /* Status colors */
   .s-applied    { background: #eff6ff; color: #1d4ed8; }
   .s-screening  { background: #f5f3ff; color: #6d28d9; }
@@ -105,6 +163,16 @@
   .s-rejected   { background: #fef2f2; color: #b91c1c; }
   .s-withdrawn  { background: #f8fafc; color: #475569; }
   .s-ghosted    { background: #f8fafc; color: #64748b; }
+
+  [data-theme="dark"] .s-applied    { background: #1e3a5f; color: #93c5fd; }
+  [data-theme="dark"] .s-screening  { background: #2e1a5e; color: #c4b5fd; }
+  [data-theme="dark"] .s-phone      { background: #2d1e00; color: #fcd34d; }
+  [data-theme="dark"] .s-technical  { background: #2a1200; color: #fdba74; }
+  [data-theme="dark"] .s-final      { background: #2d0a1e; color: #f9a8d4; }
+  [data-theme="dark"] .s-offer      { background: #052e16; color: #86efac; }
+  [data-theme="dark"] .s-rejected   { background: #3b0000; color: #fca5a5; }
+  [data-theme="dark"] .s-withdrawn  { background: #1e293b; color: #94a3b8; }
+  [data-theme="dark"] .s-ghosted    { background: #1e293b; color: #64748b; }
 
   /* Timeline */
   .timeline { list-style: none; padding-left: 20px; position: relative; }
@@ -121,6 +189,11 @@
   .kpi-num { font-size: 26px; font-weight: 800; line-height: 1; }
   .kpi-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; font-weight: 500; }
 
+  /* Star rating */
+  .star-rating { display: inline-flex; gap: 1px; }
+  .star-rating .star { color: #e2e8f0; font-size: 14px; }
+  .star-rating .star.filled { color: #f59e0b; }
+
   /* Misc */
   .empty { text-align: center; padding: 60px 24px; color: var(--text2); }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
@@ -128,23 +201,317 @@
   .text-muted { color: var(--text2); }
   .text-sm { font-size: 12px; }
 
+  /* Flash messages */
+  .flash-list { list-style: none; margin-bottom: 16px; }
+  .flash-msg {
+    padding: 12px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500;
+    margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .flash-warning { background: var(--warn-light); border: 1px solid #fcd34d; color: var(--warn); }
+  .flash-error   { background: var(--danger-light); border: 1px solid #fecaca; color: var(--danger); }
+  .flash-success { background: var(--success-light); border: 1px solid #bbf7d0; color: var(--success); }
+  .flash-info    { background: var(--accent-light); border: 1px solid #bfdbfe; color: var(--accent); }
+
   details summary { cursor: pointer; list-style: none; user-select: none; }
   details summary::-webkit-details-marker { display: none; }
   details summary::before { content: '▸ '; font-size: 10px; }
   details[open] summary::before { content: '▾ '; }
+
+  /* Bulk action bar */
+  #bulk-bar {
+    display: none;
+    position: sticky; bottom: 0; left: 0; right: 0;
+    background: var(--white); border-top: 1px solid var(--border2);
+    padding: 12px 24px; z-index: 50;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+    align-items: center; gap: 12px;
+  }
+  #bulk-bar.visible { display: flex; }
+
+  /* Heatmap */
+  .heatmap-grid { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+  .heatmap-week { display: flex; flex-direction: column; gap: 3px; }
+  .heatmap-cell {
+    width: 12px; height: 12px; border-radius: 2px;
+    background: var(--border); cursor: default;
+    transition: opacity 0.1s;
+  }
+  .heatmap-cell:hover { opacity: 0.8; }
+  .heatmap-cell.cnt-0 { background: var(--border); }
+  .heatmap-cell.cnt-1 { background: #bfdbfe; }
+  .heatmap-cell.cnt-2 { background: #3b82f6; }
+  .heatmap-cell.cnt-4plus { background: #1d4ed8; }
+  [data-theme="dark"] .heatmap-cell.cnt-0 { background: #1e293b; }
+  [data-theme="dark"] .heatmap-cell.cnt-1 { background: #1e3a5f; }
+  [data-theme="dark"] .heatmap-cell.cnt-2 { background: #2563eb; }
+  [data-theme="dark"] .heatmap-cell.cnt-4plus { background: #60a5fa; }
+
+  /* Toast notifications */
+  #toast-container { position:fixed; bottom:80px; right:24px; z-index:200; display:flex; flex-direction:column; gap:8px; }
+  .toast { background:var(--text); color:var(--white); padding:12px 16px; border-radius:8px; font-size:13px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-md); animation: slideIn 0.2s ease; min-width:280px; }
+  @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  .toast-undo { background:none; border:1px solid rgba(255,255,255,.4); color:var(--white); border-radius:5px; padding:3px 10px; cursor:pointer; font-size:12px; font-weight:600; }
+  .toast-close { background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer; font-size:16px; padding:0 2px; margin-left:auto; line-height:1; }
+
+  /* Status dropdown */
+  .status-dropdown { position:absolute; z-index:150; background:var(--white); border:1px solid var(--border2); border-radius:8px; box-shadow:var(--shadow-md); min-width:180px; padding:4px 0; }
+  .status-dropdown-item { display:block; width:100%; text-align:left; padding:7px 14px; font-size:12px; font-weight:500; background:none; border:none; cursor:pointer; color:var(--text); }
+  .status-dropdown-item:hover { background:var(--bg); }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .container { padding: 16px; }
+    nav { padding: 0 16px; gap: 2px; height: auto; min-height: 56px; }
+    nav a.nav-link { padding: 5px 8px; font-size: 12px; }
+    .form-row, .form-row.cols3 { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .job-card-row { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
+  }
 </style>
 </head>
 <body>
 <nav>
-  <span class="brand">🗂 Job Tracker</span>
-  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">Dashboard</a>
-  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">All Jobs</a>
-  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}">Stats</a>
+  <span class="brand" style="flex-direction:column;align-items:flex-start;gap:2px;line-height:1;margin-right:20px">
+    <span style="font-size:22px;font-weight:900;letter-spacing:-1px;color:var(--accent)">JAT</span>
+    <span style="font-size:8.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1.2px">Job Application Tracker</span>
+  </span>
+  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" title="Dashboard (D)">Dashboard</a>
+  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" title="All Jobs (J)">All Jobs</a>
+  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}" title="Stats (S)">Stats</a>
+  <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
+  <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
+  <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
+  <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
   <span class="spacer"></span>
-  <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
+  <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
+  <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
+  <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
+  <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+  <button class="btn btn-secondary btn-sm" onclick="openQuickAdd()" title="Quick Add (Q)" style="margin-right:6px">⚡ Quick Add</button>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
 </nav>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Quick Add Modal -->
+<div id="quick-add-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.4);align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:var(--radius);padding:24px;width:100%;max-width:420px;box-shadow:var(--shadow-md);margin:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <span style="font-weight:700;font-size:15px">⚡ Quick Add</span>
+      <button onclick="closeQuickAdd()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;line-height:1">×</button>
+    </div>
+    <form method="post" action="{{ url_for('quick_add') }}" id="quick-add-form">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Company *</label>
+          <input class="form-input" type="text" name="company" id="qa-company" required placeholder="Google">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Role *</label>
+          <input class="form-input" type="text" name="role" id="qa-role" required placeholder="Senior SWE">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Status</label>
+          <select class="form-input" name="status">
+            <option value="applied">Applied</option>
+            <option value="screening">Screening</option>
+            <option value="phone_interview">Phone Interview</option>
+            <option value="offer">Offer</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Source</label>
+          <input class="form-input" type="text" name="source" placeholder="LinkedIn">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Save</button>
+        <button type="button" onclick="closeQuickAdd()" class="btn btn-secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <ul class="flash-list">
+      {% for category, message in messages %}
+      <li class="flash-msg flash-{{ category }}">
+        {% if category == 'warning' %}⚠️{% elif category == 'error' %}❌{% elif category == 'success' %}✅{% else %}ℹ️{% endif %}
+        {{ message }}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  {% endwith %}
   {% block content %}{% endblock %}
 </div>
+
+<script>
+function toggleDark() {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+  document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
+}
+(function() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  const btn = document.getElementById('darkToggle');
+  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
+})();
+
+// Toast system
+function showToast(msg, undoCallback, autoDismissMs) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  let inner = `<span style="flex:1">${msg}</span>`;
+  if (undoCallback) {
+    inner += `<button class="toast-undo" onclick="this._undoClicked=true;undoToast(this)">Undo</button>`;
+  }
+  inner += `<button class="toast-close" onclick="dismissToast(this.closest('.toast'))">&times;</button>`;
+  toast.innerHTML = inner;
+  container.appendChild(toast);
+
+  let timer = null;
+  if (autoDismissMs) {
+    timer = setTimeout(() => {
+      if (!toast._undone) dismissToast(toast);
+    }, autoDismissMs);
+    toast._timer = timer;
+  }
+  if (undoCallback) {
+    toast._undoCallback = undoCallback;
+  }
+  return toast;
+}
+function dismissToast(toast) {
+  if (!toast || !toast.parentNode) return;
+  toast.style.transition = 'opacity 0.2s';
+  toast.style.opacity = '0';
+  setTimeout(() => toast.remove(), 200);
+}
+function undoToast(btn) {
+  const toast = btn.closest('.toast');
+  toast._undone = true;
+  if (toast._timer) clearTimeout(toast._timer);
+  if (toast._undoCallback) toast._undoCallback();
+  dismissToast(toast);
+}
+
+// Quick Add modal
+function openQuickAdd() {
+  const m = document.getElementById('quick-add-modal');
+  m.style.display = 'flex';
+  setTimeout(() => document.getElementById('qa-company').focus(), 50);
+}
+function closeQuickAdd() {
+  document.getElementById('quick-add-modal').style.display = 'none';
+  document.getElementById('quick-add-form').reset();
+}
+document.addEventListener('click', e => {
+  const modal = document.getElementById('quick-add-modal');
+  if (modal && e.target === modal) closeQuickAdd();
+});
+
+// Browser notifications for follow-up reminders
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+function scheduleFollowUpNotifications(followups) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  followups.forEach(f => {
+    new Notification('Job Tracker — Follow Up', {
+      body: `Follow up with ${f.company} (${f.role})`,
+      icon: '/favicon.ico',
+      tag: `followup-${f.id}`
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', requestNotificationPermission);
+
+// Search highlight
+function highlightSearch(term) {
+  if (!term || !term.trim()) return;
+  const cards = document.querySelectorAll('.job-card-row');
+  const re = new RegExp('(' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  cards.forEach(card => {
+    card.querySelectorAll('span, div').forEach(el => {
+      if (el.children.length === 0 && el.textContent.trim()) {
+        el.innerHTML = el.textContent.replace(re, '<mark style="background:#fef08a;border-radius:2px;padding:0 1px">$1</mark>');
+      }
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const term = params.get('search');
+  if (term) highlightSearch(term);
+});
+
+// Keyboard shortcuts (Feature 11)
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'n' || e.key === 'N') window.location.href = '/add';
+  if (e.key === 'q' || e.key === 'Q') openQuickAdd();
+  if (e.key === 'd' || e.key === 'D') window.location.href = '/';
+  if (e.key === 'j' || e.key === 'J') window.location.href = '/applications';
+  if (e.key === 's' || e.key === 'S') window.location.href = '/stats';
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
+    closeQuickAdd();
+  }
+});
+
+// Search history (Feature 12)
+function saveSearchHistory(term) {
+  if (!term || !term.trim()) return;
+  let history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+  history = history.filter(t => t !== term);
+  history.unshift(term);
+  history = history.slice(0, 5);
+  localStorage.setItem('searchHistory', JSON.stringify(history));
+}
+function loadSearchHistory() {
+  const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+  let dl = document.getElementById('search-history-list');
+  if (!dl) {
+    const searchInput = document.querySelector('input[name="search"]');
+    if (!searchInput) return;
+    dl = document.createElement('datalist');
+    dl.id = 'search-history-list';
+    document.body.appendChild(dl);
+    searchInput.setAttribute('list', 'search-history-list');
+    // Save on form submit
+    const form = searchInput.closest('form');
+    if (form) {
+      form.addEventListener('submit', () => {
+        saveSearchHistory(searchInput.value.trim());
+      });
+    }
+  }
+  dl.innerHTML = '';
+  history.forEach(term => {
+    const opt = document.createElement('option');
+    opt.value = term;
+    dl.appendChild(opt);
+  });
+}
+document.addEventListener('DOMContentLoaded', loadSearchHistory);
+</script>
 </body>
 </html>

@@ -6,13 +6,41 @@
 {% block content %}
 
 <!-- Header -->
-<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
   <div>
     <a href="{{ url_for('index') }}" style="font-size:12px;color:var(--text2)">← All Jobs</a>
-    <h1 style="font-size:22px;font-weight:800;margin-top:6px">{{ job.company }}</h1>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap">
+      <h1 style="font-size:22px;font-weight:800;">{{ job.company }}</h1>
+      <!-- Star toggle -->
+      <form method="post" action="{{ url_for('star_job', job_id=job.id) }}" style="margin:0">
+        <input type="hidden" name="next" value="{{ request.url }}">
+        <button type="submit" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}" style="font-size:22px">
+          {{ '★' if job.starred else '☆' }}
+        </button>
+      </form>
+      {% if job.interest_score and job.interest_score > 0 %}
+      <span class="star-rating" title="Interest: {{ job.interest_score }}/5">
+        {% for i in range(1,6) %}
+        <span class="star {% if i <= job.interest_score %}filled{% endif %}" style="font-size:16px">★</span>
+        {% endfor %}
+      </span>
+      {% endif %}
+    </div>
     <div style="color:var(--text2);font-size:15px;margin-top:2px">{{ job.role }}</div>
+    {% if tags %}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      {% for tag in tags %}
+      <a href="{{ url_for('index', tag=tag) }}" class="tag-pill">#{{ tag }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
-  <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+  <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap">
+    <a href="{{ url_for('checklist', job_id=job.id) }}" class="btn btn-secondary btn-sm">📋 Checklist</a>
+    <a href="{{ url_for('print_job', job_id=job.id) }}" class="btn btn-secondary btn-sm" target="_blank">🖨 Print</a>
+    <form method="post" action="{{ url_for('clone_job', job_id=job.id) }}" style="margin:0">
+      <button type="submit" class="btn btn-secondary">⧉ Clone</button>
+    </form>
     <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary">✏ Edit</a>
     <form method="post" action="{{ url_for('delete_job', job_id=job.id) }}"
           onsubmit="return confirm('Delete this application? This cannot be undone.')">
@@ -21,14 +49,14 @@
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+<div class="detail-grid">
 
-  <!-- Left: details + JD + docs -->
+  <!-- Left: details + interview rounds + docs + JD -->
   <div>
 
     <!-- Meta card -->
     <div class="card" style="padding:20px 24px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <span class="badge {{ status_class(job.status) }}" style="font-size:12px;padding:5px 14px">{{ status_labels[job.status] }}</span>
         {% if job.applied_date %}<span style="color:var(--text2);font-size:13px">Applied {{ job.applied_date }}</span>{% endif %}
         {% if job.job_url %}
@@ -36,7 +64,7 @@
         {% endif %}
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
         <div>
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Location</div>
           <div style="font-size:14px">{{ job.location or '—' }}</div>
@@ -49,13 +77,218 @@
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Source</div>
           <div style="font-size:14px">{{ job.source or '—' }}</div>
         </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Resume Version</div>
+          <div style="font-size:14px">{{ job.resume_version or '—' }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Follow-up Date</div>
+          <div style="font-size:14px{% if job.follow_up_date %};color:var(--warn);font-weight:600{% endif %}">{{ job.follow_up_date or '—' }}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Offer Deadline</div>
+          <div style="font-size:14px{% if job.offer_deadline %};color:var(--danger);font-weight:600{% endif %}">{{ job.offer_deadline or '—' }}</div>
+        </div>
       </div>
+
+      {% if job.status == 'rejected' and job.rejection_reason %}
+      <hr class="divider">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px">Rejection Reason</div>
+      <div style="font-size:13px;color:var(--danger);font-weight:500">{{ job.rejection_reason }}</div>
+      {% endif %}
+
+      {% if job.next_action %}
+      <hr class="divider">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px">Next Action</div>
+      <div style="font-size:13px;color:var(--accent);font-weight:500">→ {{ job.next_action }}</div>
+      {% endif %}
 
       {% if job.notes %}
       <hr class="divider">
       <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:6px">Notes</div>
       <div style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap">{{ job.notes }}</div>
       {% endif %}
+    </div>
+
+    <!-- Contact card -->
+    {% if job.recruiter_name or job.recruiter_email or job.recruiter_linkedin %}
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:14px">Contact</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        {% if job.recruiter_name %}
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Name</div>
+          <div style="font-size:14px">{{ job.recruiter_name }}</div>
+        </div>
+        {% endif %}
+        {% if job.recruiter_email %}
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Email</div>
+          <div style="font-size:14px"><a href="mailto:{{ job.recruiter_email }}">{{ job.recruiter_email }}</a></div>
+        </div>
+        {% endif %}
+        {% if job.recruiter_linkedin %}
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">LinkedIn</div>
+          <div style="font-size:14px"><a href="{{ job.recruiter_linkedin }}" target="_blank">View Profile</a></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Salary Negotiation card -->
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <details {% if negotiation %}open{% endif %}>
+        <summary style="display:flex;align-items:center;justify-content:space-between;outline:none">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+            Salary Negotiation
+          </span>
+        </summary>
+        <div style="margin-top:14px">
+          {% if negotiation %}
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px">
+            <div>
+              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Initial Offer</div>
+              <div style="font-size:14px;font-weight:600">{{ negotiation.initial_offer or '—' }}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Counter Offer</div>
+              <div style="font-size:14px;font-weight:600;color:var(--accent)">{{ negotiation.counter_offer or '—' }}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Final Amount</div>
+              <div style="font-size:14px;font-weight:700;color:var(--success)">{{ negotiation.final_amount or '—' }}</div>
+            </div>
+          </div>
+          {% if negotiation.notes %}
+          <div style="font-size:13px;color:var(--text2);white-space:pre-wrap;margin-bottom:14px">{{ negotiation.notes }}</div>
+          {% endif %}
+          {% endif %}
+
+          <hr class="divider" style="margin:0 0 14px">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">
+            {% if negotiation %}Update{% else %}Add{% endif %} Negotiation
+          </div>
+          <form method="post" action="{{ url_for('save_negotiation', job_id=job.id) }}">
+            <div class="form-row cols3" style="margin-bottom:12px">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Initial Offer</label>
+                <input class="form-input" type="text" name="initial_offer"
+                       value="{{ negotiation.initial_offer if negotiation else '' }}"
+                       placeholder="$120,000" style="font-size:13px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Counter Offer</label>
+                <input class="form-input" type="text" name="counter_offer"
+                       value="{{ negotiation.counter_offer if negotiation else '' }}"
+                       placeholder="$135,000" style="font-size:13px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Final Amount</label>
+                <input class="form-input" type="text" name="final_amount"
+                       value="{{ negotiation.final_amount if negotiation else '' }}"
+                       placeholder="$128,000" style="font-size:13px">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">Notes</label>
+              <textarea class="form-input" name="notes" rows="2" style="font-size:13px"
+                        placeholder="Negotiation notes…">{{ negotiation.notes if negotiation else '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Save Negotiation</button>
+          </form>
+        </div>
+      </details>
+    </div>
+
+    <!-- Interview Rounds -->
+    <div class="card" style="padding:20px 24px;margin-bottom:16px">
+      <details {% if interview_rounds %}open{% endif %}>
+        <summary style="display:flex;align-items:center;justify-content:space-between;outline:none">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+            Interview Rounds ({{ interview_rounds|length }})
+          </span>
+        </summary>
+
+        <div style="margin-top:14px">
+          {% if interview_rounds %}
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+            {% for round in interview_rounds %}
+            <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-weight:700;font-size:14px">{{ round.round_name }}</span>
+                  {% if round.interview_date %}
+                  <span style="font-size:12px;color:var(--text3)">{{ round.interview_date }}</span>
+                  {% endif %}
+                  {% if round.outcome %}
+                  <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;
+                    {% if round.outcome == 'Passed' %}background:var(--success-light);color:var(--success)
+                    {% elif round.outcome == 'Failed' %}background:var(--danger-light);color:var(--danger)
+                    {% else %}background:var(--bg);color:var(--text2){% endif %}">
+                    {{ round.outcome }}
+                  </span>
+                  {% endif %}
+                </div>
+                <form method="post" action="{{ url_for('delete_round', job_id=job.id, round_id=round.id) }}"
+                      onsubmit="return confirm('Delete this round?')" style="margin:0">
+                  <button type="submit" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+                </form>
+              </div>
+              {% if round.notes %}
+              <div style="font-size:12px;color:var(--text2);margin-bottom:4px;white-space:pre-wrap">{{ round.notes }}</div>
+              {% endif %}
+              {% if round.questions_asked %}
+              <details style="margin-top:6px">
+                <summary style="font-size:11px;font-weight:600;color:var(--text3);cursor:pointer">Questions asked</summary>
+                <div style="margin-top:6px;font-size:12px;color:var(--text2);white-space:pre-wrap;padding-left:12px">{{ round.questions_asked }}</div>
+              </details>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p style="font-size:13px;color:var(--text2);margin-bottom:12px">No interview rounds yet.</p>
+          {% endif %}
+
+          <!-- Add round form -->
+          <hr class="divider" style="margin:14px 0">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">Add Interview Round</div>
+          <form method="post" action="{{ url_for('interviews', job_id=job.id) }}">
+            <div class="form-row" style="margin-bottom:12px">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Round Name</label>
+                <input class="form-input" type="text" name="round_name" required placeholder="Phone Screen, Technical…" style="font-size:13px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Date</label>
+                <input class="form-input" type="date" name="interview_date" style="font-size:13px">
+              </div>
+            </div>
+            <div class="form-row" style="margin-bottom:12px">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">Outcome</label>
+                <select class="form-input" name="outcome" style="font-size:13px">
+                  {% for o in round_outcomes %}
+                  <option value="{{ o }}">{{ o }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div></div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">Notes</label>
+              <textarea class="form-input" name="notes" rows="2" style="font-size:13px" placeholder="General notes about the round…"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">Questions Asked</label>
+              <textarea class="form-input" name="questions_asked" rows="3" style="font-size:13px" placeholder="List the questions asked…"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Add Round</button>
+          </form>
+        </div>
+      </details>
     </div>
 
     <!-- Documents -->
@@ -105,14 +338,17 @@
       </div>
     </div>
 
-    <!-- JD -->
+    <!-- JD with Copy button -->
     {% if job.jd %}
     <div class="card" style="padding:20px 24px">
       <details>
-        <summary style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:0;outline:none">
-          Job Description
+        <summary style="display:flex;align-items:center;justify-content:space-between;outline:none">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">
+            Job Description
+          </span>
+          <button onclick="copyJD(event)" class="btn btn-ghost btn-sm" id="copy-jd-btn">📋 Copy JD</button>
         </summary>
-        <div style="margin-top:12px;font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;max-height:400px;overflow-y:auto">{{ job.jd }}</div>
+        <div id="jd-content" style="margin-top:12px;font-size:13px;line-height:1.8;color:var(--text);white-space:pre-wrap;max-height:400px;overflow-y:auto">{{ job.jd }}</div>
       </details>
     </div>
     {% endif %}
@@ -120,6 +356,34 @@
 
   <!-- Right: timeline -->
   <div>
+    <!-- Status Timeline Chart -->
+    {% if timeline|length > 1 %}
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px">Status Progression</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        {% for event in timeline %}
+        {% if event.event_date %}
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:10px;height:10px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--text)">{{ event.event }}</div>
+            <div style="font-size:11px;color:var(--text3)">{{ event.event_date }}</div>
+          </div>
+          {% if not loop.last %}
+          {% set next_event = timeline[loop.index] %}
+          {% if next_event.event_date and event.event_date %}
+          <div style="font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0">
+            ↓
+          </div>
+          {% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card" style="padding:20px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Timeline</div>
 
@@ -176,6 +440,17 @@ function addDetailRow() {
     <button type="button" onclick="this.closest('.upload-row').remove()" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
   `;
   c.appendChild(r);
+}
+
+function copyJD(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const text = document.getElementById('jd-content').innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-jd-btn');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => btn.textContent = '📋 Copy JD', 2000);
+  }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 </script>
 {% endblock %}

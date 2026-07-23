@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Interview Checklist — {{ job.company }}{% endblock %}
+{% block content %}
+
+<div style="max-width:640px;margin:0 auto">
+  <div class="page-header">
+    <div>
+      <a href="{{ url_for('job_detail', job_id=job.id) }}" style="font-size:12px;color:var(--text2)">← {{ job.company }} / {{ job.role }}</a>
+      <h1 style="margin-top:4px">Interview Prep Checklist</h1>
+    </div>
+    {% if not items %}
+    <form method="post" action="{{ url_for('checklist', job_id=job.id) }}">
+      <input type="hidden" name="action" value="seed">
+      <button type="submit" class="btn btn-secondary">Load default checklist</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if items %}
+  <!-- Progress bar -->
+  {% set pct = ((done_count / items|length) * 100)|int %}
+  <div class="card" style="padding:14px 20px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px">
+      <span>{{ done_count }} / {{ items|length }} complete</span>
+      <span style="color:{% if pct == 100 %}var(--success){% else %}var(--accent){% endif %}">{{ pct }}%</span>
+    </div>
+    <div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden">
+      <div style="background:{% if pct == 100 %}var(--success){% else %}var(--accent){% endif %};height:8px;width:{{ pct }}%;border-radius:6px;transition:width 0.3s"></div>
+    </div>
+  </div>
+
+  <!-- Checklist items -->
+  <div class="card" style="padding:8px 0;margin-bottom:16px">
+    {% for item in items %}
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:{% if not loop.last %}1px solid var(--border){% else %}none{% endif %};{% if item.done %}opacity:0.6{% endif %}">
+      <form method="post" action="{{ url_for('checklist', job_id=job.id) }}" style="margin:0">
+        <input type="hidden" name="action" value="toggle">
+        <input type="hidden" name="item_id" value="{{ item.id }}">
+        <button type="submit" style="background:none;border:2px solid {% if item.done %}var(--success){% else %}var(--border2){% endif %};border-radius:50%;width:22px;height:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--success);flex-shrink:0;padding:0">
+          {% if item.done %}✓{% endif %}
+        </button>
+      </form>
+      <span style="flex:1;font-size:13px;{% if item.done %}text-decoration:line-through;color:var(--text3){% endif %}">{{ item.item }}</span>
+      <form method="post" action="{{ url_for('checklist', job_id=job.id) }}" style="margin:0">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="item_id" value="{{ item.id }}">
+        <button type="submit" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px" onclick="return confirm('Remove this item?')">✕</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="padding:40px;text-align:center;margin-bottom:16px">
+    <div style="font-size:36px;margin-bottom:8px">📋</div>
+    <p style="color:var(--text2);margin-bottom:16px">No checklist items yet.</p>
+    <form method="post" action="{{ url_for('checklist', job_id=job.id) }}">
+      <input type="hidden" name="action" value="seed">
+      <button type="submit" class="btn btn-primary">Load default checklist</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Add item form -->
+  <div class="card" style="padding:20px 24px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:12px">Add Item</div>
+    <form method="post" action="{{ url_for('checklist', job_id=job.id) }}" style="display:flex;gap:10px">
+      <input type="hidden" name="action" value="add">
+      <input class="form-input" type="text" name="item" required placeholder="e.g. Review system design concepts…" style="flex:1">
+      <button type="submit" class="btn btn-primary">Add</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -4,6 +4,10 @@
 
 <div class="page-header">
   <h1>Stats</h1>
+  <div style="display:flex;gap:8px">
+    <a href="{{ url_for('salary') }}" class="btn btn-secondary">Salary Comparison</a>
+    <a href="{{ url_for('export_csv') }}" class="btn btn-secondary">Export CSV</a>
+  </div>
 </div>
 
 <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr)">
@@ -15,7 +19,32 @@
   <div class="kpi"><div class="kpi-num" style="color:#d97706">{{ counts.get('phone_interview',0)+counts.get('technical_interview',0)+counts.get('final_interview',0) }}</div><div class="kpi-lbl">Interviewing</div></div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+<!-- Interview funnel KPIs (Feature 7) -->
+<div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:20px">
+  <div class="kpi" style="border-left:3px solid var(--accent)">
+    <div class="kpi-num" style="color:var(--accent)">{{ interview_rate }}%</div>
+    <div class="kpi-lbl">Applied → Interview Rate</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">{{ reached_interview }} of {{ total }} reached interview stage</div>
+  </div>
+  <div class="kpi" style="border-left:3px solid var(--success)">
+    <div class="kpi-num" style="color:var(--success)">{{ offer_from_interview }}%</div>
+    <div class="kpi-lbl">Interview → Offer Rate</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">{{ counts.get('offer',0) }} offers from {{ reached_interview }} interviews</div>
+  </div>
+</div>
+
+{% if avg_to_response is not none %}
+<div class="card" style="padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+  <span style="font-size:20px">⏱</span>
+  <div>
+    <span style="font-size:14px;font-weight:600">Avg days to first response: </span>
+    <span style="font-size:18px;font-weight:800;color:var(--accent)">{{ avg_to_response }}</span>
+    <span style="color:var(--text2);font-size:13px"> days</span>
+  </div>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
 
   <div class="card" style="padding:20px 24px">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">By Status</div>
@@ -64,6 +93,104 @@
       {% endfor %}
     </div>
     {% endif %}
+  </div>
+</div>
+
+<!-- Day of Week chart (Feature 8) -->
+{% if dow_stats %}
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Applications by Day of Week</div>
+  {% set max_dow = dow_stats | map(attribute='cnt') | max %}
+  <div style="display:flex;align-items:flex-end;gap:12px;height:80px">
+    {% for row in dow_stats %}
+    {% set h = ((row.cnt / max_dow) * 68) | int if max_dow > 0 else 0 %}
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+      <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
+      <span style="font-size:11px;color:var(--text3)">{{ row.dow }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Rejection Breakdown (Feature 6) -->
+{% if rejection_breakdown %}
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Rejection Breakdown</div>
+  {% set total_rejected = rejection_breakdown | map(attribute='cnt') | sum %}
+  {% for row in rejection_breakdown %}
+  {% set pct = ((row.cnt / total_rejected * 100) | int) if total_rejected > 0 else 0 %}
+  <div style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+      <span>{{ row.reason }}</span>
+      <span style="color:var(--text2);font-weight:600">{{ row.cnt }} <span style="font-weight:400;color:var(--text3)">({{ pct }}%)</span></span>
+    </div>
+    <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+      <div style="background:#ef4444;height:6px;width:{{ pct }}%;border-radius:4px"></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Response Rate by Source -->
+{% if source_stats %}
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:14px">Response Rate by Source</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead>
+      <tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Source</th>
+        <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Applied</th>
+        <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Responded</th>
+        <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Response Rate</th>
+        <th style="text-align:center;padding:8px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Offers</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in source_stats %}
+      {% set rate = ((row.responded / row.total * 100)|int) if row.total > 0 else 0 %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px 12px;font-weight:500">{{ row.source }}</td>
+        <td style="padding:10px 12px;text-align:center;color:var(--text2)">{{ row.total }}</td>
+        <td style="padding:10px 12px;text-align:center;color:var(--text2)">{{ row.responded }}</td>
+        <td style="padding:10px 12px;text-align:center">
+          <span style="font-weight:700;color:{% if rate >= 50 %}var(--success){% elif rate >= 25 %}var(--warn){% else %}var(--danger){% endif %}">
+            {{ rate }}%
+          </span>
+        </td>
+        <td style="padding:10px 12px;text-align:center;color:{% if row.offers > 0 %}var(--success){% else %}var(--text3){% endif %};font-weight:{% if row.offers > 0 %}700{% else %}400{% endif %}">
+          {{ row.offers }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Heatmap Calendar -->
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:14px">Activity — Last 52 Weeks</div>
+  <div class="heatmap-grid">
+    {% for week in heatmap_weeks %}
+    <div class="heatmap-week">
+      {% for day in week %}
+      {% set cnt = heatmap_data.get(day, 0) %}
+      <div class="heatmap-cell cnt-{% if cnt == 0 %}0{% elif cnt == 1 %}1{% elif cnt <= 3 %}2{% else %}4plus{% endif %}"
+           title="{{ day }}: {{ cnt }} application{{ 's' if cnt != 1 else '' }}"></div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--text3)">
+    <span>Less</span>
+    <div style="width:12px;height:12px;border-radius:2px;background:var(--border)"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#bfdbfe"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#3b82f6"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#1d4ed8"></div>
+    <span>More</span>
   </div>
 </div>
 

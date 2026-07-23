@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit Contact — {{ contact.name }}{% endblock %}
+{% block content %}
+
+<div style="max-width:480px;margin:0 auto">
+  <div class="page-header">
+    <div>
+      <a href="{{ url_for('contacts') }}" style="font-size:12px;color:var(--text2)">← Contacts</a>
+      <h1 style="margin-top:4px">Edit Contact</h1>
+    </div>
+  </div>
+
+  <div class="card" style="padding:24px">
+    <form method="post" action="{{ url_for('edit_contact', contact_id=contact.id) }}">
+      <div class="form-group">
+        <label class="form-label">Name *</label>
+        <input class="form-input" type="text" name="name" required value="{{ contact.name }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input class="form-input" type="text" name="title" value="{{ contact.title or '' }}" placeholder="Senior Recruiter">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Company</label>
+        <input class="form-input" type="text" name="company" value="{{ contact.company or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" name="email" value="{{ contact.email or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">LinkedIn</label>
+        <input class="form-input" type="url" name="linkedin" value="{{ contact.linkedin or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" name="notes" rows="3">{{ contact.notes or '' }}</textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px">Save</button>
+        <a href="{{ url_for('contacts') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

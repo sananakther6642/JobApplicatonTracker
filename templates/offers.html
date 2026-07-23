@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Offer Comparison — Job Tracker{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Offer Comparison</h1>
+  <a href="{{ url_for('index', status='offer') }}" class="btn btn-secondary">View All Offers</a>
+</div>
+
+{% if offer_jobs %}
+
+{% if offer_jobs|length >= 2 %}
+<div style="background:var(--success-light);border:1px solid #bbf7d0;border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;font-size:13px;color:var(--success)">
+  ✓ Comparing {{ offer_jobs|length }} offers. Highlighted row has the highest detected salary.
+</div>
+{% endif %}
+
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px">
+  <thead>
+    <tr style="background:var(--bg);border-bottom:2px solid var(--border)">
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Company</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Role</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Salary</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Location</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Source</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Applied</th>
+      <th style="text-align:left;padding:12px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text3)">Notes</th>
+      <th style="padding:12px 14px"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in offer_jobs %}
+    <tr style="border-bottom:1px solid var(--border);{% if job.id == highest_id %}background:#f0fdf4;{% endif %}transition:background 0.15s"
+        onmouseover="this.style.background='{% if job.id == highest_id %}#dcfce7{% else %}var(--bg){% endif %}'"
+        onmouseout="this.style.background='{% if job.id == highest_id %}#f0fdf4{% else %}var(--white){% endif %}'">
+      <td style="padding:12px 14px;font-weight:700">
+        {{ job.company }}
+        {% if job.id == highest_id %}
+        <span style="font-size:10px;background:#bbf7d0;color:#15803d;padding:1px 6px;border-radius:99px;margin-left:4px;font-weight:700">Top</span>
+        {% endif %}
+      </td>
+      <td style="padding:12px 14px;color:var(--text2)">{{ job.role }}</td>
+      <td style="padding:12px 14px;font-weight:{% if job.id == highest_id %}700{% else %}500{% endif %};color:{% if job.id == highest_id %}var(--success){% else %}var(--text){% endif %}">
+        {{ job.salary_range or '—' }}
+      </td>
+      <td style="padding:12px 14px;color:var(--text2)">{{ job.location or '—' }}</td>
+      <td style="padding:12px 14px;color:var(--text2)">{{ job.source or '—' }}</td>
+      <td style="padding:12px 14px;color:var(--text2)">{{ job.applied_date or '—' }}</td>
+      <td style="padding:12px 14px;color:var(--text2);max-width:200px">
+        {% if job.notes %}
+        <span style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px" title="{{ job.notes }}">{{ job.notes[:80] }}{% if job.notes|length > 80 %}…{% endif %}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td style="padding:12px 14px">
+        <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% else %}
+<div class="empty">
+  <div class="empty-icon">🎉</div>
+  <p>No offers yet. Keep going!</p>
+  <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top:12px">View All Applications</a>
+</div>
+{% endif %}
+
+{% endblock %}
