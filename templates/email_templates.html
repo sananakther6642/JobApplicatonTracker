@@ -40,8 +40,11 @@
   {% endfor %}
 </div>
 
+<!-- Suggestion backdrop -->
+<div id="ph-backdrop" style="display:none;position:fixed;inset:0;z-index:9998;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);background:rgba(0,0,0,.18)"></div>
+
 <!-- Suggestion dropdown -->
-<div id="ph-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--white);border:1px solid var(--border2);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:240px;max-width:340px;padding:6px 0;font-size:13px"></div>
+<div id="ph-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--white);border:1px solid var(--border2);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);min-width:260px;max-width:min(480px,90vw);width:max-content;padding:6px 0;font-size:13px;overflow:hidden"></div>
 
 <style>
 .ph {
@@ -67,16 +70,16 @@
   min-width: 60px;
 }
 .ph-sugg {
-  padding: 8px 14px;
+  padding: 8px 16px;
   cursor: pointer;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   color: var(--text);
 }
 .ph-sugg:hover, .ph-sugg.focused { background: var(--accent-light); color: var(--accent); }
-.ph-sugg-label { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ph-sugg-sub { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.ph-sugg-label { font-weight: 600; word-break: break-word; white-space: normal; line-height: 1.4; }
+.ph-sugg-sub { font-size: 11px; color: var(--text3); word-break: break-word; white-space: normal; line-height: 1.3; }
 .ph-sugg:hover .ph-sugg-sub, .ph-sugg.focused .ph-sugg-sub { color: var(--accent); opacity: .75; }
 .ph-section { padding: 4px 14px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); }
 .ph-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
@@ -155,9 +158,11 @@ let _focusIdx = -1;
 let _suggItems = [];
 
 const DD = document.getElementById('ph-dropdown');
+const BD = document.getElementById('ph-backdrop');
 
 function closeDropdown() {
   DD.style.display = 'none';
+  BD.style.display = 'none';
   _activeInput = null;
   _focusIdx = -1;
   _suggItems = [];
@@ -165,6 +170,10 @@ function closeDropdown() {
 
 document.addEventListener('click', e => {
   if (!DD.contains(e.target) && e.target !== _activeInput) closeDropdown();
+});
+document.getElementById('ph-backdrop').addEventListener('mousedown', e => {
+  e.preventDefault();
+  closeDropdown();
 });
 
 function showDropdown(input, suggestions, placeholder) {
@@ -210,17 +219,25 @@ function showDropdown(input, suggestions, placeholder) {
 
   _suggItems = DD.querySelectorAll('.ph-sugg[data-val]');
 
-  // position below input
+  // show backdrop
+  BD.style.display = 'block';
+
+  // position below/above input
   const rect = input.getBoundingClientRect();
   DD.style.display = 'block';
+  // clamp width to viewport
+  DD.style.maxWidth = Math.min(480, window.innerWidth - 32) + 'px';
+
   const ddH = DD.offsetHeight;
   const spaceBelow = window.innerHeight - rect.bottom - 8;
   if (spaceBelow >= ddH || spaceBelow >= 120) {
-    DD.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+    DD.style.top = (rect.bottom + window.scrollY + 6) + 'px';
   } else {
-    DD.style.top  = (rect.top + window.scrollY - ddH - 4) + 'px';
+    DD.style.top = (rect.top + window.scrollY - ddH - 6) + 'px';
   }
-  DD.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 350) + 'px';
+  // left-align to input, never overflow right edge
+  const leftRaw = rect.left + window.scrollX;
+  DD.style.left = Math.max(8, Math.min(leftRaw, window.innerWidth - DD.offsetWidth - 8)) + 'px';
 }
 
 function appendItem(s) {
