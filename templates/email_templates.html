@@ -4,7 +4,7 @@
 
 <div class="page-header">
   <h1>Email Templates</h1>
-  <span style="font-size:13px;color:var(--text2)">Click <span style="background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> to fill in your details</span>
+  <span style="font-size:13px;color:var(--text2)">Click <span style="background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> to fill — picks suggestions from your saved jobs</span>
 </div>
 
 <div style="display:flex;flex-direction:column;gap:16px">
@@ -40,6 +40,9 @@
   {% endfor %}
 </div>
 
+<!-- Suggestion dropdown -->
+<div id="ph-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--white);border:1px solid var(--border2);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.18);min-width:240px;max-width:340px;padding:6px 0;font-size:13px"></div>
+
 <style>
 .ph {
   background: var(--accent-light);
@@ -63,10 +66,184 @@
   outline: none;
   min-width: 60px;
 }
+.ph-sugg {
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.ph-sugg:hover, .ph-sugg.focused { background: var(--accent-light); color: var(--accent); }
+.ph-sugg-label { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-sugg-sub { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.ph-sugg:hover .ph-sugg-sub, .ph-sugg.focused .ph-sugg-sub { color: var(--accent); opacity: .75; }
+.ph-section { padding: 4px 14px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); }
+.ph-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </style>
 
 <script>
-// Store raw templates
+// ── Job data from server ──────────────────────────────────────────────────────
+const JOBS = {{ jobs | tojson }};
+const SETTINGS = {{ settings | tojson }};
+
+// ── Placeholder → suggestion builder ─────────────────────────────────────────
+function getSuggestions(placeholder) {
+  const p = placeholder.replace(/^\[|\]$/g, '').toUpperCase();
+  const suggs = [];
+
+  // helpers
+  const addJob = (label, sub) => suggs.push({ label, sub, type: 'job' });
+  const addUser = (label, sub) => suggs.push({ label, sub, type: 'user' });
+  const addStatic = (label) => suggs.push({ label, sub: '', type: 'static' });
+
+  if (p === 'COMPANY') {
+    JOBS.forEach(j => addJob(j.company, j.role));
+  } else if (p === 'ROLE') {
+    JOBS.forEach(j => addJob(j.role, j.company));
+  } else if (p === 'RECRUITER_NAME' || p === 'INTERVIEWER_NAME' || p === 'INTERVIEWER_NAME / HIRING_MANAGER') {
+    JOBS.filter(j => j.recruiter_name).forEach(j => addJob(j.recruiter_name, j.company + ' · ' + j.role));
+    if (!suggs.length) addStatic('Hiring Manager');
+  } else if (p === 'DATE') {
+    JOBS.forEach(j => addJob(j.applied_date, j.company + ' — ' + j.role));
+    addStatic(new Date().toISOString().slice(0,10));
+  } else if (p === 'YOUR_NAME') {
+    const v = SETTINGS['your_name'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('Sanan Akther');
+  } else if (p === 'YOUR_EMAIL') {
+    const v = SETTINGS['your_email'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('sananakther@gmail.com');
+  } else if (p === 'YOUR_PHONE') {
+    const v = SETTINGS['your_phone'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('+49 176 74753402');
+  } else if (p === 'LINKEDIN_URL') {
+    const v = SETTINGS['linkedin_url'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('linkedin.com/in/sananakther');
+  } else if (p === 'RELEVANT_SKILL' || p === "YOUR_SKILL/EXPERIENCE" || p === 'RELEVANT_AREA') {
+    ['Python automation', 'ECU flashing & diagnostics (UDS, DoIP, CAN)',
+     'CI/CD pipeline development', 'embedded test automation',
+     'hardware-software synchronization'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_PROJECT_OR_TOPIC_DISCUSSED' || p === 'TOPIC_DISCUSSED' || p === 'KEY_TOPIC') {
+    ['automotive ECU flashing pipeline', 'diagnostic protocol testing (UDS/DoIP)',
+     'GitLab CI/CD regression testing', 'hardware-software sync middleware',
+     'LexGuard AI agentic workflow'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_ASPECT_OF_ROLE') {
+    JOBS.forEach(j => addJob(j.role + ' at ' + j.company, j.status));
+    ['the test automation scope', 'the embedded systems focus',
+     'the CI/CD integration work'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_QUESTION_OR_PROBLEM') {
+    ['the coding challenge', 'the system design question',
+     'the debugging exercise', 'the architecture discussion'].forEach(addStatic);
+  } else if (p === 'BRIEF_ADDITIONAL_INSIGHT_OR_ALTERNATIVE_APPROACH') {
+    ['an alternative test architecture using pytest fixtures',
+     'a potential improvement to the CI pipeline structure',
+     'a note on scalability across firmware variants'].forEach(addStatic);
+  }
+
+  // dedupe by label
+  const seen = new Set();
+  return suggs.filter(s => { if (seen.has(s.label)) return false; seen.add(s.label); return true; });
+}
+
+// ── Dropdown ──────────────────────────────────────────────────────────────────
+let _activeInput = null;
+let _focusIdx = -1;
+let _suggItems = [];
+
+const DD = document.getElementById('ph-dropdown');
+
+function closeDropdown() {
+  DD.style.display = 'none';
+  _activeInput = null;
+  _focusIdx = -1;
+  _suggItems = [];
+}
+
+document.addEventListener('click', e => {
+  if (!DD.contains(e.target) && e.target !== _activeInput) closeDropdown();
+});
+
+function showDropdown(input, suggestions, placeholder) {
+  _activeInput = input;
+  _focusIdx = -1;
+  DD.innerHTML = '';
+
+  if (!suggestions.length) { closeDropdown(); return; }
+
+  // Section: from jobs
+  const jobSuggs = suggestions.filter(s => s.type === 'job');
+  const otherSuggs = suggestions.filter(s => s.type !== 'job');
+
+  if (jobSuggs.length) {
+    const sec = document.createElement('div');
+    sec.className = 'ph-section';
+    sec.textContent = 'From your jobs';
+    DD.appendChild(sec);
+    jobSuggs.forEach(s => appendItem(s));
+    if (otherSuggs.length) {
+      const hr = document.createElement('hr');
+      hr.className = 'ph-divider';
+      DD.appendChild(hr);
+    }
+  }
+  if (otherSuggs.length) {
+    const sec = document.createElement('div');
+    sec.className = 'ph-section';
+    sec.textContent = jobSuggs.length ? 'Suggestions' : 'Suggestions';
+    DD.appendChild(sec);
+    otherSuggs.forEach(s => appendItem(s));
+  }
+
+  // free-type row
+  const hr2 = document.createElement('hr');
+  hr2.className = 'ph-divider';
+  DD.appendChild(hr2);
+  const free = document.createElement('div');
+  free.className = 'ph-sugg';
+  free.innerHTML = `<span class="ph-sugg-label" style="color:var(--text3);font-weight:400">Type custom value…</span>`;
+  free.addEventListener('mousedown', e => { e.preventDefault(); input.focus(); });
+  DD.appendChild(free);
+
+  _suggItems = DD.querySelectorAll('.ph-sugg[data-val]');
+
+  // position below input
+  const rect = input.getBoundingClientRect();
+  DD.style.display = 'block';
+  const ddH = DD.offsetHeight;
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  if (spaceBelow >= ddH || spaceBelow >= 120) {
+    DD.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  } else {
+    DD.style.top  = (rect.top + window.scrollY - ddH - 4) + 'px';
+  }
+  DD.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 350) + 'px';
+}
+
+function appendItem(s) {
+  const el = document.createElement('div');
+  el.className = 'ph-sugg';
+  el.dataset.val = s.label;
+  el.innerHTML = `<span class="ph-sugg-label">${escHTML(s.label)}</span>${s.sub ? `<span class="ph-sugg-sub">${escHTML(s.sub)}</span>` : ''}`;
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (_activeInput) {
+      _activeInput.value = s.label;
+      _activeInput.dispatchEvent(new Event('blur'));
+    }
+    closeDropdown();
+  });
+  DD.appendChild(el);
+}
+
+function escHTML(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Store raw templates ───────────────────────────────────────────────────────
 const RAW_SUBJECTS = {};
 const RAW_BODIES = {};
 
@@ -87,7 +264,6 @@ function renderTemplate(idx) {
 function renderInto(containerId, text, inline) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  // Split on [PLACEHOLDER] pattern
   const parts = text.split(/(\[[A-Z0-9_ /—–-]+\])/g);
   container.innerHTML = '';
   parts.forEach(part => {
@@ -95,7 +271,7 @@ function renderInto(containerId, text, inline) {
       const span = document.createElement('span');
       span.className = 'ph';
       span.textContent = part;
-      span.title = 'Click to fill in';
+      span.title = 'Click to fill';
       span.addEventListener('click', () => activatePlaceholder(span, containerId));
       container.appendChild(span);
     } else {
@@ -105,54 +281,98 @@ function renderInto(containerId, text, inline) {
 }
 
 function activatePlaceholder(span, containerId) {
+  const placeholder = span.textContent;
   const input = document.createElement('input');
   input.className = 'ph-input';
   input.value = '';
-  input.placeholder = span.textContent.replace(/^\[|\]$/g, '');
+  input.placeholder = placeholder.replace(/^\[|\]$/g, '');
   input.size = Math.max(input.placeholder.length, 8);
   span.replaceWith(input);
   input.focus();
-  input.select();
 
-  function commit() {
-    const val = input.value.trim();
-    const replacement = document.createElement('span');
-    if (val) {
-      replacement.style.cssText = 'color:var(--success);font-weight:600';
-      replacement.textContent = val;
-    } else {
-      replacement.className = 'ph';
-      replacement.textContent = '[' + input.placeholder + ']';
-      replacement.title = 'Click to fill in';
-      replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
-    }
-    input.replaceWith(replacement);
-    if (val) {
-      // re-wire remaining placeholders in same container so they still work
-      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
-        ph.replaceWith(ph.cloneNode(true)); // re-clone to clear old listeners
-      });
-      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
-        ph.addEventListener('click', () => activatePlaceholder(ph, containerId));
-      });
-    }
-  }
+  // show suggestions
+  const suggs = getSuggestions(placeholder);
+  showDropdown(input, suggs, placeholder);
 
-  input.addEventListener('blur', commit);
+  // filter on type
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase();
+    const allSuggs = getSuggestions(placeholder);
+    const filtered = q ? allSuggs.filter(s => s.label.toLowerCase().includes(q)) : allSuggs;
+    showDropdown(input, filtered, placeholder);
+  });
+
+  // keyboard nav in dropdown
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { input.value = ''; commit(); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _focusIdx = Math.min(_focusIdx + 1, _suggItems.length - 1);
+      updateFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _focusIdx = Math.max(_focusIdx - 1, -1);
+      updateFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (_focusIdx >= 0 && _suggItems[_focusIdx]) {
+        input.value = _suggItems[_focusIdx].dataset.val;
+      }
+      closeDropdown();
+      commit(input, placeholder, containerId);
+    } else if (e.key === 'Escape') {
+      input.value = '';
+      closeDropdown();
+      commit(input, placeholder, containerId);
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // small delay — let mousedown on dropdown fire first
+    setTimeout(() => {
+      if (_activeInput === input) {
+        closeDropdown();
+        commit(input, placeholder, containerId);
+      }
+    }, 150);
   });
 }
 
-function resetTemplate(idx) {
-  renderTemplate(String(idx));
+function updateFocus() {
+  _suggItems.forEach((el, i) => {
+    el.classList.toggle('focused', i === _focusIdx);
+    if (i === _focusIdx) el.scrollIntoView({ block: 'nearest' });
+  });
 }
+
+function commit(input, placeholder, containerId) {
+  const val = input.value.trim();
+  const replacement = document.createElement('span');
+  if (val) {
+    replacement.style.cssText = 'color:var(--success);font-weight:600';
+    replacement.textContent = val;
+  } else {
+    replacement.className = 'ph';
+    replacement.textContent = placeholder;
+    replacement.title = 'Click to fill';
+    replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
+  }
+  input.replaceWith(replacement);
+  // re-wire remaining placeholders
+  const container = document.getElementById(containerId);
+  if (container) {
+    container.querySelectorAll('.ph').forEach(ph => {
+      const clone = ph.cloneNode(true);
+      clone.addEventListener('click', () => activatePlaceholder(clone, containerId));
+      ph.replaceWith(clone);
+    });
+  }
+}
+
+function resetTemplate(idx) { renderTemplate(String(idx)); }
 
 function getPlainText(containerId) {
   const el = document.getElementById(containerId);
-  if (!el) return '';
-  return el.innerText;
+  return el ? el.innerText : '';
 }
 
 function copySubject(idx) {

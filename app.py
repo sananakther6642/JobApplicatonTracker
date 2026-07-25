@@ -219,6 +219,38 @@ def save_tags(conn, job_id, tags_str):
                 conn.execute("INSERT INTO tags (job_id, name) VALUES (?,?)", (job_id, tag))
 
 
+def sync_recruiter_contact(conn, name, email, linkedin, company, role):
+    """Auto-add or update contact from recruiter fields. No-op if name is blank."""
+    name = (name or "").strip()
+    if not name:
+        return
+    email    = (email    or "").strip()
+    linkedin = (linkedin or "").strip()
+    company  = (company  or "").strip()
+    title    = ("Recruiter" + (f" — {role}" if role else "")).strip(" —")
+
+    existing = conn.execute(
+        "SELECT id, email, linkedin FROM contacts WHERE LOWER(name)=LOWER(?)",
+        (name,)
+    ).fetchone()
+
+    if existing:
+        # update only fields that were blank before or are being enriched
+        new_email    = email    or existing["email"]
+        new_linkedin = linkedin or existing["linkedin"]
+        conn.execute(
+            "UPDATE contacts SET email=?, linkedin=?, company=? WHERE id=?",
+            (new_email, new_linkedin, company or existing["company"] if company else existing["company"],
+             existing["id"]),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO contacts (name, email, linkedin, company, title)
+               VALUES (?,?,?,?,?)""",
+            (name, email, linkedin, company, title),
+        )
+
+
 def get_tags_for_jobs(conn, job_ids):
     """Return a dict {job_id: [tag_name, ...]} for a list of job ids."""
     if not job_ids:
@@ -593,6 +625,11 @@ def add_job():
                  "Initial application"),
             )
             save_tags(conn, job_id, request.form.get("tags", ""))
+            sync_recruiter_contact(conn,
+                request.form.get("recruiter_name", ""),
+                request.form.get("recruiter_email", ""),
+                request.form.get("recruiter_linkedin", ""),
+                company, role)
 
         files = request.files.getlist("documents")
         doc_types = request.form.getlist("doc_types")
@@ -703,6 +740,11 @@ def api_add_job():
             (job_id, "Applied", applied, "Initial application"),
         )
         save_tags(conn, job_id, d.get("tags", ""))
+        sync_recruiter_contact(conn,
+            d.get("recruiter_name", ""),
+            d.get("recruiter_email", ""),
+            d.get("recruiter_linkedin", ""),
+            company, role)
 
     return {
         "id": job_id,
@@ -786,6 +828,11 @@ def edit_job(job_id):
                     ),
                 )
             save_tags(conn, job_id, request.form.get("tags", ""))
+            sync_recruiter_contact(conn,
+                request.form.get("recruiter_name", ""),
+                request.form.get("recruiter_email", ""),
+                request.form.get("recruiter_linkedin", ""),
+                request.form.get("company", ""), request.form.get("role", ""))
             return redirect(url_for("job_detail", job_id=job_id))
 
     return render_template(
@@ -1590,7 +1637,20 @@ Best regards,
 
 @app.route("/email-templates")
 def email_templates():
-    return render_template("email_templates.html", templates=EMAIL_TEMPLATES)
+    with get_db() as conn:
+        jobs = conn.execute(
+            """SELECT id, company, role, recruiter_name, recruiter_email,
+                      applied_date, status
+               FROM jobs ORDER BY applied_date DESC"""
+        ).fetchall()
+        settings_rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    settings = {r["key"]: r["value"] for r in settings_rows}
+    return render_template(
+        "email_templates.html",
+        templates=EMAIL_TEMPLATES,
+        jobs=[dict(j) for j in jobs],
+        settings=settings,
+    )
 
 
 # ---------------------------------------------------------------------------
