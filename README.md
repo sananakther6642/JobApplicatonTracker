@@ -35,6 +35,12 @@ Local job application tracker built with Flask + SQLite. Runs entirely on your m
 - Multiple roles at same company stay separate
 - Version collision: `_v2`, `_v3`
 
+#### JSON API
+- **`POST /api/job`** — create a job via JSON (no browser needed)
+- **`job_template.json`** — blank template to fill per application
+- **`push_job.sh`** — one-command push: `./push_job.sh job_template.json`
+- See `api.txt` for full field reference and curl examples
+
 ### Import / Export / Backup
 - **CSV export** — download all applications as spreadsheet
 - **CSV import** — re-import exported CSV or any CSV with Company + Role columns
@@ -82,6 +88,9 @@ Open [http://localhost:5050](http://localhost:5050)
 ```
 ├── app.py              # Flask backend + all routes
 ├── start.sh            # Start script (kills port 5050 first)
+├── api.txt             # JSON API field reference + curl examples
+├── job_template.json   # Blank JSON template — fill and push
+├── push_job.sh         # ./push_job.sh job_template.json → creates job via API
 ├── jobs.db             # Auto-created on first run (gitignored)
 ├── uploads/            # Uploaded documents (gitignored)
 └── templates/
@@ -109,6 +118,20 @@ Open [http://localhost:5050](http://localhost:5050)
 All data stored in `jobs.db` on disk. Survives server restarts and reboots. Only lost if the file or folder is deleted.
 
 `jobs.db` and `uploads/` are gitignored — your job data never goes to GitHub.
+
+## JSON API
+
+Skip the browser — push jobs directly from the terminal.
+
+```bash
+# copy template, fill it in, push
+cp job_template.json my_job.json
+# edit my_job.json
+./push_job.sh my_job.json
+# → {"id": 16, "url": "http://localhost:5050/job/16", "duplicate_warning": false}
+```
+
+See `api.txt` for all fields and more examples.
 
 ## Branches
 
