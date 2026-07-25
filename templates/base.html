@@ -252,6 +252,11 @@
   #toast-container { position:fixed; bottom:80px; right:24px; z-index:200; display:flex; flex-direction:column; gap:8px; }
   .toast { background:var(--text); color:var(--white); padding:12px 16px; border-radius:8px; font-size:13px; display:flex; align-items:center; gap:12px; box-shadow:var(--shadow-md); animation: slideIn 0.2s ease; min-width:280px; }
   @keyframes slideIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  @keyframes pulse-dot { 0%,100% { transform:scale(1); opacity:1; } 50% { transform:scale(1.5); opacity:.6; } }
+  #gen-tip { position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;background:#1e1b4b;color:#fff;padding:14px 20px 14px 16px;border-radius:12px;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.35);max-width:480px;width:calc(100vw - 48px);animation:slideIn .35s ease; }
+  #gen-tip a { color:#a5b4fc;font-weight:700;text-decoration:none; }
+  #gen-tip a:hover { color:#c7d2fe; }
+  #gen-tip-close { background:none;border:none;color:#a5b4fc;font-size:18px;cursor:pointer;line-height:1;padding:0 0 0 4px;flex-shrink:0; }
   .toast-undo { background:none; border:1px solid rgba(255,255,255,.4); color:var(--white); border-radius:5px; padding:3px 10px; cursor:pointer; font-size:12px; font-weight:600; }
   .toast-close { background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer; font-size:16px; padding:0 2px; margin-left:auto; line-height:1; }
 
@@ -289,17 +294,30 @@
   <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
   <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
   <span class="spacer"></span>
-  <a href="{{ url_for('generate_job') }}" class="nav-link {% if request.endpoint == 'generate_job' %}active{% endif %}" title="Generate from JD">Generate</a>
   <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
   <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
   <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
   <button class="btn btn-secondary btn-sm" onclick="openQuickAdd()" title="Quick Add (Q)" style="margin-right:6px">⚡ Quick Add</button>
+  <a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
+     title="Generate from JD (G)"
+     style="margin-right:6px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none;box-shadow:0 0 0 2px rgba(124,58,237,.25);position:relative">
+    ✨ Generate
+    {% if request.endpoint != 'generate_job' %}<span id="gen-pulse" style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#f59e0b;border-radius:50%;animation:pulse-dot 1.6s ease-in-out infinite"></span>{% endif %}
+  </a>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
 </nav>
 
 <!-- Toast container -->
 <div id="toast-container"></div>
+
+<!-- Generate tip popup (first visit only) -->
+<div id="gen-tip" style="display:none">
+  <span style="font-size:20px;flex-shrink:0">✨</span>
+  <span><strong>New: Generate from JD</strong> — paste a job description and auto-fill all fields instantly.
+    <a href="{{ url_for('generate_job') }}">Try it →</a></span>
+  <button id="gen-tip-close" onclick="dismissGenTip()" title="Dismiss">✕</button>
+</div>
 
 <!-- Quick Add Modal -->
 <div id="quick-add-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.4);align-items:center;justify-content:center">
@@ -469,12 +487,26 @@ document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
   if (e.key === 'n' || e.key === 'N') window.location.href = '/add';
   if (e.key === 'q' || e.key === 'Q') openQuickAdd();
+  if (e.key === 'g' || e.key === 'G') window.location.href = '/generate';
   if (e.key === 'd' || e.key === 'D') window.location.href = '/';
   if (e.key === 'j' || e.key === 'J') window.location.href = '/applications';
   if (e.key === 's' || e.key === 'S') window.location.href = '/stats';
   if (e.key === 'Escape') {
     document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
     closeQuickAdd();
+  }
+});
+
+// Generate tip — show once until dismissed
+function dismissGenTip() {
+  localStorage.setItem('genTipDismissed', '1');
+  const el = document.getElementById('gen-tip');
+  if (el) { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (!localStorage.getItem('genTipDismissed')) {
+    const el = document.getElementById('gen-tip');
+    if (el) setTimeout(() => el.style.display='flex', 800);
   }
 });
 

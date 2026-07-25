@@ -57,6 +57,7 @@ Local job application tracker built with Flask + SQLite. Runs entirely on your m
 - **Salary comparison** — all jobs with salary data, grouped by status
 
 ### UX
+- **Generate from JD** — paste job description → auto-fills company, role, location, salary, tags, recruiter, interest score; push straight to tracker (press `G`)
 - **Dark mode** — toggle in nav, persists via localStorage
 - **Mobile responsive** — works on phone and tablet
 - **Keyboard shortcuts** — `N` Add Job, `Q` Quick Add, `D` Dashboard, `J` All Jobs, `S` Stats, `Esc` close dropdowns
@@ -154,6 +155,7 @@ See `api.txt` for all fields and more examples.
 |---|---|
 | `N` | Add Job (full form) |
 | `Q` | Quick Add (modal) |
+| `G` | Generate from JD |
 | `D` | Dashboard |
 | `J` | All Jobs |
 | `S` | Stats |
