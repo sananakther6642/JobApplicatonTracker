@@ -610,6 +610,70 @@ def add_job():
     )
 
 
+@app.route("/api/job", methods=["POST"])
+def api_add_job():
+    """JSON API — create a job. Returns {id, url} on success."""
+    d = request.get_json(force=True, silent=True)
+    if not d:
+        return {"error": "invalid JSON"}, 400
+    company = (d.get("company") or "").strip()
+    role = (d.get("role") or "").strip()
+    if not company or not role:
+        return {"error": "company and role are required"}, 400
+
+    interest_raw = str(d.get("interest_score", ""))
+    interest = int(interest_raw) if interest_raw.isdigit() and 1 <= int(interest_raw) <= 5 else 0
+    applied = d.get("applied_date") or date.today().isoformat()
+
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id FROM jobs WHERE LOWER(company)=LOWER(?) AND LOWER(role)=LOWER(?)",
+            (company, role)
+        ).fetchone()
+        duplicate = existing is not None
+
+        cur = conn.execute(
+            """INSERT INTO jobs
+               (company, role, jd, job_url, applied_date, status, source,
+                salary_range, location, notes,
+                recruiter_name, recruiter_email, recruiter_linkedin,
+                follow_up_date, offer_deadline, resume_version,
+                interest_score, next_action)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                company, role,
+                d.get("jd", ""),
+                d.get("job_url", ""),
+                applied,
+                d.get("status", "applied"),
+                d.get("source", ""),
+                d.get("salary_range", ""),
+                d.get("location", ""),
+                d.get("notes", ""),
+                d.get("recruiter_name", ""),
+                d.get("recruiter_email", ""),
+                d.get("recruiter_linkedin", ""),
+                d.get("follow_up_date", ""),
+                d.get("offer_deadline", ""),
+                d.get("resume_version", ""),
+                interest,
+                d.get("next_action", ""),
+            ),
+        )
+        job_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
+            (job_id, "Applied", applied, "Initial application"),
+        )
+        save_tags(conn, job_id, d.get("tags", ""))
+
+    return {
+        "id": job_id,
+        "url": f"http://localhost:5050/job/{job_id}",
+        "duplicate_warning": duplicate,
+    }, 201
+
+
 def _save_uploads(files, doc_types, job_id, company, role):
     with get_db() as conn:
         for i, f in enumerate(files):

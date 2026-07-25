@@ -7,3 +7,5 @@ uploads/
 *.egg-info/
 venv/
 .env
+*.pdf
+*.tex
