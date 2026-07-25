@@ -311,12 +311,20 @@ function activatePlaceholder(span, containerId) {
   const suggs = getSuggestions(placeholder);
   showDropdown(input, suggs, placeholder);
 
-  // filter on type
+  // filter on type — always reopen dropdown while input is active
   input.addEventListener('input', () => {
+    _activeInput = input; // re-assert in case blur raced
     const q = input.value.toLowerCase();
     const allSuggs = getSuggestions(placeholder);
     const filtered = q ? allSuggs.filter(s => s.label.toLowerCase().includes(q)) : allSuggs;
-    showDropdown(input, filtered, placeholder);
+    if (filtered.length) {
+      showDropdown(input, filtered, placeholder);
+    } else {
+      // no matches — keep backdrop, show empty state
+      DD.innerHTML = `<div class="ph-section" style="padding:10px 16px;color:var(--text3);font-size:12px;text-transform:none;letter-spacing:0">No matches — press Enter to use typed value</div>`;
+      DD.style.display = 'block';
+      BD.style.display = 'block';
+    }
   });
 
   // keyboard nav in dropdown
@@ -344,13 +352,13 @@ function activatePlaceholder(span, containerId) {
   });
 
   input.addEventListener('blur', () => {
-    // small delay — let mousedown on dropdown fire first
+    // longer delay — input event must fire and re-assert _activeInput first
     setTimeout(() => {
       if (_activeInput === input) {
         closeDropdown();
         commit(input, placeholder, containerId);
       }
-    }, 150);
+    }, 220);
   });
 }
 
