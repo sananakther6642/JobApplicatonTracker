@@ -1,0 +1,98 @@
+JAT — JSON API Reference
+========================
+
+POST http://localhost:5050/api/job
+Content-Type: application/json
+
+Create a new job application. Returns {id, url, duplicate_warning}.
+
+REQUIRED FIELDS:
+  company         string   Company name
+  role            string   Job title / role
+
+OPTIONAL FIELDS:
+  status          string   applied | screening | phone_interview | technical_interview |
+                           final_interview | offer | rejected | withdrawn | ghosted
+                           Default: "applied"
+  applied_date    string   YYYY-MM-DD. Default: today
+  source          string   LinkedIn | Indeed | Referral | Company Website | etc.
+  location        string   e.g. "Berlin, Germany" or "Remote"
+  salary_range    string   e.g. "$83,000–$160,000" or "€70k–€90k"
+  jd              string   Full job description text
+  job_url         string   URL to the job posting
+  tags            string   Comma-separated: "python,backend,remote"
+  interest_score  string   "1"–"5"
+  notes           string   Your personal notes
+  next_action     string   e.g. "Follow up 2026-07-31"
+  follow_up_date  string   YYYY-MM-DD
+  offer_deadline  string   YYYY-MM-DD
+  resume_version  string   e.g. "v2" or "Sanan_Akther_CV_Ford"
+  recruiter_name  string
+  recruiter_email string
+  recruiter_linkedin string
+
+RESPONSE (201 Created):
+  {
+    "id": 15,
+    "url": "http://localhost:5050/job/15",
+    "duplicate_warning": false
+  }
+
+ERRORS:
+  400  {"error": "invalid JSON"}
+  400  {"error": "company and role are required"}
+
+
+EXAMPLE — minimal:
+------------------
+curl -X POST http://localhost:5050/api/job \
+  -H "Content-Type: application/json" \
+  -d '{"company": "Ford Motor Company", "role": "ADAS HiL Automation Developer"}'
+
+
+EXAMPLE — full:
+---------------
+curl -X POST http://localhost:5050/api/job \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company": "Ford Motor Company",
+    "role": "ADAS HiL Automation Developer",
+    "status": "applied",
+    "applied_date": "2026-07-24",
+    "source": "LinkedIn",
+    "location": "Sunrise, FL (Hybrid)",
+    "salary_range": "$83,000–$160,000",
+    "jd": "Full JD text here...",
+    "job_url": "https://www.linkedin.com/jobs/view/59594",
+    "tags": "ADAS,automotive,HiL,Python,C++,embedded",
+    "interest_score": "5",
+    "notes": "Strong match — ECU flashing, UDS/DoIP/CAN, GitLab CI at Mercedes.",
+    "next_action": "Follow up 2026-07-31",
+    "follow_up_date": "2026-07-31",
+    "resume_version": "Sanan_Akther_CV_Ford"
+  }'
+
+
+TEMPLATE JSON (copy and fill):
+-------------------------------
+{
+  "company": "",
+  "role": "",
+  "status": "applied",
+  "applied_date": "",
+  "source": "",
+  "location": "",
+  "salary_range": "",
+  "jd": "",
+  "job_url": "",
+  "tags": "",
+  "interest_score": "",
+  "notes": "",
+  "next_action": "",
+  "follow_up_date": "",
+  "offer_deadline": "",
+  "resume_version": "",
+  "recruiter_name": "",
+  "recruiter_email": "",
+  "recruiter_linkedin": ""
+}
