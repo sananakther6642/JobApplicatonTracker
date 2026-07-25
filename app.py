@@ -949,6 +949,29 @@ def add_event(job_id):
     return redirect(url_for("job_detail", job_id=job_id))
 
 
+@app.route("/api/timeline", methods=["POST"])
+def api_add_timeline():
+    """JSON: {job_ids:[1,2,...], event:'...', notes:'...'}"""
+    d = request.get_json(force=True, silent=True) or {}
+    job_ids = d.get("job_ids") or []
+    event   = (d.get("event") or "").strip()
+    notes   = (d.get("notes") or "").strip()
+    if not job_ids or not event:
+        return {"error": "job_ids and event required"}, 400
+    today = date.today().isoformat()
+    inserted = []
+    with get_db() as conn:
+        for jid in job_ids:
+            row = conn.execute("SELECT id FROM jobs WHERE id=?", (jid,)).fetchone()
+            if row:
+                conn.execute(
+                    "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
+                    (jid, event, today, notes),
+                )
+                inserted.append(jid)
+    return {"inserted": inserted}, 201
+
+
 # ---------------------------------------------------------------------------
 # Delete job
 # ---------------------------------------------------------------------------

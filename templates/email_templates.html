@@ -369,12 +369,23 @@ function updateFocus() {
   });
 }
 
+// ── Per-template filled values tracker ───────────────────────────────────────
+// filledValues[idx][PLACEHOLDER_KEY] = 'filled value'
+const filledValues = {};
+
 function commit(input, placeholder, containerId) {
   const val = input.value.trim();
   const replacement = document.createElement('span');
   if (val) {
     replacement.style.cssText = 'color:var(--success);font-weight:600';
     replacement.textContent = val;
+    // track filled value per template
+    const idx = getIdxFromContainerId(containerId);
+    if (idx) {
+      if (!filledValues[idx]) filledValues[idx] = {};
+      const key = placeholder.replace(/^\[|\]$/g, '');
+      filledValues[idx][key] = val;
+    }
   } else {
     replacement.className = 'ph';
     replacement.textContent = placeholder;
@@ -382,7 +393,6 @@ function commit(input, placeholder, containerId) {
     replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
   }
   input.replaceWith(replacement);
-  // re-wire remaining placeholders
   const container = document.getElementById(containerId);
   if (container) {
     container.querySelectorAll('.ph').forEach(ph => {
@@ -393,11 +403,69 @@ function commit(input, placeholder, containerId) {
   }
 }
 
-function resetTemplate(idx) { renderTemplate(String(idx)); }
+function getIdxFromContainerId(containerId) {
+  // e.g. 'tpl-body-2' or 'subj-rendered-2' → '2'
+  const m = containerId.match(/(\d+)$/);
+  return m ? m[1] : null;
+}
+
+function getMatchedJobIds(idx) {
+  const filled = filledValues[idx] || {};
+  const company = (filled['COMPANY'] || '').toLowerCase().trim();
+  const role    = (filled['ROLE']    || '').toLowerCase().trim();
+  if (!company && !role) return [];
+
+  return JOBS
+    .filter(j => {
+      const cMatch = !company || j.company.toLowerCase().includes(company) || company.includes(j.company.toLowerCase());
+      const rMatch = !role    || j.role.toLowerCase().includes(role)       || role.includes(j.role.toLowerCase());
+      return cMatch && rMatch;
+    })
+    .map(j => j.id);
+}
+
+function logEmailUsed(idx, tplTitle, type) {
+  const jobIds = getMatchedJobIds(idx);
+  if (!jobIds.length) return;  // no matched job → nothing to log
+
+  const filled = filledValues[idx] || {};
+  const company = filled['COMPANY'] || '';
+  const role    = filled['ROLE']    || '';
+  const noteParts = [`Sent "${tplTitle}" (${type})`];
+  if (company) noteParts.push(`to ${company}`);
+  if (role)    noteParts.push(`re: ${role}`);
+  const notes = noteParts.join(' ');
+
+  fetch('/api/timeline', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ job_ids: jobIds, event: `📧 Email Sent — ${tplTitle}`, notes }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.inserted && data.inserted.length) {
+      const links = data.inserted.map(id => `<a href="/job/${id}" style="color:var(--accent);font-weight:600">#${id}</a>`).join(', ');
+      showToast(`Timeline updated for job${data.inserted.length > 1 ? 's' : ''} ${links}`, null, 4000);
+    }
+  })
+  .catch(() => {});
+}
+
+function resetTemplate(idx) {
+  delete filledValues[idx];
+  renderTemplate(String(idx));
+}
 
 function getPlainText(containerId) {
   const el = document.getElementById(containerId);
   return el ? el.innerText : '';
+}
+
+function getTplTitle(idx) {
+  const card = document.getElementById('tpl-' + idx);
+  if (!card) return 'Email Template';
+  const h = card.querySelector('[style*="font-weight:700"]');
+  return h ? h.textContent.trim() : 'Email Template';
 }
 
 function copySubject(idx) {
@@ -406,6 +474,7 @@ function copySubject(idx) {
     const btn = document.getElementById('copy-subj-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Subject', 2000);
+    logEmailUsed(String(idx), getTplTitle(idx), 'subject');
   }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 
@@ -415,6 +484,7 @@ function copyBody(idx) {
     const btn = document.getElementById('copy-body-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Body', 2000);
+    logEmailUsed(String(idx), getTplTitle(idx), 'body');
   }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 </script>
