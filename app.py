@@ -610,6 +610,43 @@ def add_job():
     )
 
 
+@app.route("/generate", methods=["GET", "POST"])
+def generate_job():
+    result = None
+    error = None
+    if request.method == "POST":
+        try:
+            from gen_job import generate, pdf_to_text
+            import tempfile
+
+            jd_text = request.form.get("jd_text", "").strip()
+
+            # optional PDF uploads — read to temp files
+            def _read_pdf_upload(field):
+                f = request.files.get(field)
+                if f and f.filename:
+                    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                    f.save(tmp.name)
+                    text = pdf_to_text(tmp.name)
+                    os.unlink(tmp.name)
+                    return text, f.filename
+                return "", ""
+
+            cv_text, cv_name     = _read_pdf_upload("cv_pdf")
+            cover_text, _        = _read_pdf_upload("cover_pdf")
+
+            if not jd_text:
+                error = "Job description is required."
+            else:
+                import json as _json
+                data = generate(jd_text, cv_text, cover_text, cv_name, "")
+                result = _json.dumps(data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            error = str(e)
+
+    return render_template("generate.html", result=result, error=error)
+
+
 @app.route("/api/job", methods=["POST"])
 def api_add_job():
     """JSON API — create a job. Returns {id, url} on success."""

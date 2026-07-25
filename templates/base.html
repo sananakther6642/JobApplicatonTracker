@@ -289,6 +289,7 @@
   <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
   <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
   <span class="spacer"></span>
+  <a href="{{ url_for('generate_job') }}" class="nav-link {% if request.endpoint == 'generate_job' %}active{% endif %}" title="Generate from JD">Generate</a>
   <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
   <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
