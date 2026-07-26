@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Job Tracker{% endblock %}
+{% block title %}Dashboard — JAT{% endblock %}
 
 {% macro status_class(s) %}{% if s=='applied' %}s-applied{% elif s=='screening' %}s-screening{% elif s=='phone_interview' %}s-phone{% elif s=='technical_interview' %}s-technical{% elif s=='final_interview' %}s-final{% elif s=='offer' %}s-offer{% elif s=='rejected' %}s-rejected{% elif s=='withdrawn' %}s-withdrawn{% else %}s-ghosted{% endif %}{% endmacro %}
 
@@ -42,77 +42,84 @@
   </div>
 </div>
 
-<!-- Weekly Goal Tracker -->
-{% if weekly_goal %}
-{% set goal_pct = [(this_week_count / weekly_goal * 100)|int, 100]|min %}
-<div class="card" style="padding:16px 20px;margin-bottom:20px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:600">
-      Weekly Goal: <span style="color:var(--accent)">{{ this_week_count }}</span> / {{ weekly_goal }} applications
-      {% if this_week_count >= weekly_goal %}<span style="color:var(--success);margin-left:6px">✓ Done!</span>{% endif %}
+<!-- Goals row — compact side-by-side -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+
+  <!-- Weekly Goal -->
+  {% if weekly_goal %}
+  {% set goal_pct = [(this_week_count / weekly_goal * 100)|int, 100]|min %}
+  <div class="card" style="padding:14px 18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:600">
+        This Week: <span style="color:var(--accent)">{{ this_week_count }}</span><span style="color:var(--text3)">/{{ weekly_goal }}</span>
+        {% if this_week_count >= weekly_goal %}<span style="color:var(--success);margin-left:5px">✓</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:5px;align-items:center">
+        <input type="number" name="weekly_goal" value="{{ weekly_goal }}" min="1" max="50"
+               class="form-input" style="width:58px;padding:3px 7px;font-size:11px">
+        <button type="submit" class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px">↺</button>
+      </form>
     </div>
-    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:6px;align-items:center">
-      <input type="number" name="weekly_goal" value="{{ weekly_goal }}" min="1" max="50"
-             class="form-input" style="width:70px;padding:5px 8px;font-size:12px">
-      <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+    <div style="background:var(--bg2);border-radius:99px;height:7px;overflow:hidden">
+      <div style="background:{% if goal_pct >= 100 %}linear-gradient(90deg,var(--success),#34d399){% else %}linear-gradient(90deg,var(--accent),var(--accent2)){% endif %};height:7px;width:{{ goal_pct }}%;border-radius:99px;transition:width 0.6s cubic-bezier(.4,0,.2,1)"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">Weekly goal</div>
+  </div>
+  {% else %}
+  <div class="card" style="padding:14px 18px;border:1px dashed var(--border2)">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">Set weekly goal</div>
+    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:7px;align-items:center">
+      <input type="number" name="weekly_goal" placeholder="e.g. 10" min="1" max="50"
+             class="form-input" style="width:90px;padding:6px 9px;font-size:12px">
+      <button type="submit" class="btn btn-primary btn-sm">Set</button>
     </form>
   </div>
-  <div style="background:var(--bg2);border-radius:99px;height:10px;overflow:hidden">
-    <div style="background:{% if goal_pct >= 100 %}linear-gradient(90deg,var(--success),#34d399){% else %}linear-gradient(90deg,var(--accent),var(--accent2)){% endif %};height:10px;width:{{ goal_pct }}%;border-radius:99px;transition:width 0.6s cubic-bezier(.4,0,.2,1)"></div>
-  </div>
-</div>
-{% else %}
-<div class="card" style="padding:16px 20px;margin-bottom:20px;border:1px dashed var(--border2)">
-  <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Set a weekly application goal to track your progress.</div>
-  <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:8px;align-items:center">
-    <input type="number" name="weekly_goal" placeholder="e.g. 10" min="1" max="50"
-           class="form-input" style="width:100px;padding:7px 10px;font-size:13px">
-    <button type="submit" class="btn btn-primary btn-sm">Set Weekly Goal</button>
-  </form>
-</div>
-{% endif %}
+  {% endif %}
 
-<!-- Monthly Goal -->
-{% if monthly_goal %}
-{% set month_pct = [(this_month_count / monthly_goal * 100)|int, 100]|min %}
-<div class="card" style="padding:16px 20px;margin-bottom:16px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:600">
-      Monthly Goal: <span style="color:var(--success)">{{ this_month_count }}</span> / {{ monthly_goal }} applications
-      {% if this_month_count >= monthly_goal %}<span style="color:var(--success);margin-left:6px">✓ Done!</span>{% endif %}
+  <!-- Monthly Goal -->
+  {% if monthly_goal %}
+  {% set month_pct = [(this_month_count / monthly_goal * 100)|int, 100]|min %}
+  <div class="card" style="padding:14px 18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:600">
+        This Month: <span style="color:var(--success)">{{ this_month_count }}</span><span style="color:var(--text3)">/{{ monthly_goal }}</span>
+        {% if this_month_count >= monthly_goal %}<span style="color:var(--success);margin-left:5px">✓</span>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:5px;align-items:center">
+        <input type="number" name="monthly_goal" value="{{ monthly_goal }}" min="1" max="200"
+               class="form-input" style="width:58px;padding:3px 7px;font-size:11px">
+        <button type="submit" class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px">↺</button>
+      </form>
     </div>
-    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:6px;align-items:center">
-      <input type="number" name="monthly_goal" value="{{ monthly_goal }}" min="1" max="200"
-             class="form-input" style="width:70px;padding:5px 8px;font-size:12px">
-      <button type="submit" class="btn btn-secondary btn-sm">Update</button>
+    <div style="background:var(--bg2);border-radius:99px;height:7px;overflow:hidden">
+      <div style="background:linear-gradient(90deg,var(--success),#6ee7b7);height:7px;width:{{ month_pct }}%;border-radius:99px;transition:width 0.6s cubic-bezier(.4,0,.2,1)"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">Monthly goal</div>
+  </div>
+  {% else %}
+  <div class="card" style="padding:14px 18px;border:1px dashed var(--border2)">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500">Set monthly goal</div>
+    <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:7px;align-items:center">
+      <input type="number" name="monthly_goal" placeholder="e.g. 40" min="1" max="200"
+             class="form-input" style="width:90px;padding:6px 9px;font-size:12px">
+      <button type="submit" class="btn btn-secondary btn-sm">Set</button>
     </form>
   </div>
-  <div style="background:var(--bg2);border-radius:99px;height:8px;overflow:hidden">
-    <div style="background:linear-gradient(90deg,var(--success),#6ee7b7);height:8px;width:{{ month_pct }}%;border-radius:99px;transition:width 0.6s cubic-bezier(.4,0,.2,1)"></div>
-  </div>
-</div>
-{% else %}
-<div class="card" style="padding:14px 20px;margin-bottom:16px;border:1px dashed var(--border2)">
-  <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Set a monthly application goal.</div>
-  <form method="post" action="{{ url_for('save_settings') }}" style="display:flex;gap:8px;align-items:center">
-    <input type="number" name="monthly_goal" placeholder="e.g. 40" min="1" max="200"
-           class="form-input" style="width:100px;padding:7px 10px;font-size:13px">
-    <button type="submit" class="btn btn-secondary btn-sm">Set Monthly Goal</button>
-  </form>
-</div>
-{% endif %}
+  {% endif %}
 
+</div>
+
+<!-- Alerts -->
 {% if deadlines %}
-<!-- Offer Deadlines Alert -->
-<div style="background:var(--danger-light);border:1px solid rgba(225,29,72,.2);border-left:3px solid var(--danger);border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
-  <div style="font-weight:600;font-size:13px;color:var(--danger);margin-bottom:10px">⏳ {{ deadlines|length }} offer deadline{{ 's' if deadlines|length > 1 else '' }} in the next 7 days</div>
-  <div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="background:var(--danger-light);border:1px solid rgba(225,29,72,.2);border-left:3px solid var(--danger);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px">
+  <div style="font-weight:600;font-size:12px;color:var(--danger);margin-bottom:8px">⏳ {{ deadlines|length }} offer deadline{{ 's' if deadlines|length > 1 else '' }} in the next 7 days</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px">
     {% for job in deadlines %}
     <a href="{{ url_for('job_detail', job_id=job.id) }}"
-       style="background:var(--white);border:1px solid #fecaca;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
+       style="background:var(--white);border:1px solid rgba(225,29,72,.2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
       <strong>{{ job.company }}</strong>
       <span style="color:var(--text2)">{{ job.role }}</span>
-      <span style="color:var(--danger);font-weight:600">· deadline {{ job.offer_deadline }}</span>
+      <span style="color:var(--danger);font-weight:600">· {{ job.offer_deadline }}</span>
     </a>
     {% endfor %}
   </div>
@@ -120,17 +127,16 @@
 {% endif %}
 
 {% if followups %}
-<!-- Follow-up Alert -->
-<div style="background:var(--warn-light);border:1px solid rgba(217,119,6,.2);border-left:3px solid var(--warn);border-radius:var(--radius);padding:14px 18px;margin-bottom:20px">
-  <div style="font-weight:600;font-size:13px;color:var(--warn);margin-bottom:10px">⏰ Follow up on {{ followups|length }} application{{ 's' if followups|length > 1 else '' }}</div>
-  <div style="display:flex;flex-wrap:wrap;gap:8px">
+<div style="background:var(--warn-light);border:1px solid rgba(217,119,6,.2);border-left:3px solid var(--warn);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px">
+  <div style="font-weight:600;font-size:12px;color:var(--warn);margin-bottom:8px">⏰ Follow up on {{ followups|length }} application{{ 's' if followups|length > 1 else '' }}</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px">
     {% for job in followups %}
     <a href="{{ url_for('job_detail', job_id=job.id) }}"
-       style="background:var(--white);border:1px solid #fcd34d;border-radius:6px;padding:6px 12px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
+       style="background:var(--white);border:1px solid rgba(217,119,6,.2);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;text-decoration:none">
       <strong>{{ job.company }}</strong>
       <span style="color:var(--text2)">{{ job.role }}</span>
       {% if job.follow_up_date %}
-      <span style="color:var(--warn);font-weight:600">· follow-up {{ job.follow_up_date }}</span>
+      <span style="color:var(--warn);font-weight:600">· {{ job.follow_up_date }}</span>
       {% else %}
       <span style="color:var(--text3)">· {{ job.applied_date }}</span>
       {% endif %}
@@ -140,186 +146,168 @@
 </div>
 {% endif %}
 
-<!-- To Do section (next_action jobs) -->
-{% if next_action_jobs %}
-<div class="card" style="padding:16px 20px;margin-bottom:20px">
-  <div class="section-title">To Do ({{ next_action_jobs|length }})</div>
-  <div style="display:flex;flex-direction:column;gap:6px">
-    {% for job in next_action_jobs %}
-    <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px">
-      <span style="font-weight:600;color:var(--text);font-size:13px">{{ job.company }}</span>
-      <span style="color:var(--text3);font-size:12px">→</span>
-      <span style="color:var(--text2);font-size:13px">{{ job.role }}</span>
-      <span style="color:var(--text3);font-size:11px;margin:0 4px">·</span>
-      <span style="color:var(--accent);font-size:12px;font-weight:500">{{ job.next_action }}</span>
-    </a>
-    {% endfor %}
+{% if deadlines or followups %}<div style="margin-bottom:16px"></div>{% endif %}
+
+<!-- ── Quick-info row: To Do | Monthly Chart | Recent Activity ── -->
+<div style="display:grid;grid-template-columns:1fr 200px 220px;gap:12px;margin-bottom:20px;align-items:start">
+
+  <!-- To Do -->
+  <div class="card" style="padding:14px 16px">
+    <div class="section-title">To Do{% if next_action_jobs %} ({{ next_action_jobs|length }}){% endif %}</div>
+    {% if next_action_jobs %}
+    <div style="display:flex;flex-direction:column;gap:5px">
+      {% for job in next_action_jobs %}
+      <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none;display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;transition:border-color 0.12s" onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <span style="font-weight:600;color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">{{ job.company }}</span>
+        <span style="color:var(--accent);font-size:11px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">→ {{ job.next_action }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--text3);font-size:12px;padding:8px 0">No pending actions.</p>
+    {% endif %}
+  </div>
+
+  <!-- Monthly Chart -->
+  <div class="card" style="padding:14px 16px">
+    <div class="section-title">Monthly</div>
+    {% if monthly %}
+    {% set max_m = monthly | map(attribute='cnt') | max %}
+    <div style="display:flex;align-items:flex-end;gap:4px;height:72px">
+      {% for row in monthly | reverse %}
+      {% set h = ((row.cnt / max_m) * 56) | int if max_m > 0 else 0 %}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px" title="{{ row.month }}: {{ row.cnt }}">
+        <span style="font-size:9px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
+        <div style="background:linear-gradient(to top,var(--accent),var(--accent2));border-radius:3px 3px 0 0;width:100%;min-height:3px;height:{{ h }}px"></div>
+        <span style="font-size:8px;color:var(--text3)">{{ row.month[5:] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--text3);font-size:12px;padding:8px 0">No data yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="card" style="padding:14px 16px">
+    <div class="section-title">Recent Activity</div>
+    {% if activity %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for ev in activity[:6] %}
+      <div style="display:flex;gap:8px;font-size:12px">
+        <div style="width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
+        <div style="min-width:0">
+          <a href="{{ url_for('job_detail', job_id=ev.job_id) }}" style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block">{{ ev.company }}</a>
+          <span style="color:var(--text2);font-size:11px">{{ ev.event }}</span>
+          <div style="color:var(--text3);font-size:10px">{{ ev.event_date or '' }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p style="color:var(--text3);font-size:12px;padding:8px 0">No activity yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ── Active Pipeline — full width, scrollable ── -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+  <div style="padding:14px 20px 0;display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px">Active Pipeline</h2>
+    <a href="{{ url_for('index') }}" style="font-size:11px;color:var(--accent);font-weight:600;text-decoration:none">View all →</a>
+  </div>
+  <div style="padding:14px 20px 20px;max-height:520px;overflow-y:auto;overscroll-behavior:contain">
+
+  {% set active_statuses = ['phone_interview','technical_interview','final_interview','screening','applied'] %}
+  {% set has_active = namespace(v=false) %}
+  {% for s in active_statuses %}
+    {% if kanban[s] %}{% set has_active.v = true %}{% endif %}
+  {% endfor %}
+
+  {% if has_active.v %}
+  <div style="display:flex;flex-direction:column;gap:20px">
+  {% for s in active_statuses %}
+    {% if kanban[s] %}
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:8px">
+        {{ status_labels[s] }}
+        <span style="background:var(--accent-light);color:var(--accent);border-radius:99px;padding:1px 8px;font-size:10px;font-weight:700">{{ kanban[s]|length }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+      {% for job in kanban[s] %}
+      <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:12px;transition:all 0.15s"
+             onmouseenter="this.style.background='var(--white)';this.style.borderColor='var(--border2)';this.style.boxShadow='var(--shadow-md)'"
+             onmouseleave="this.style.background='var(--bg)';this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-weight:600;font-size:13px;color:var(--text)">{{ job.company }}</span>
+              {% if job.starred %}<span style="color:var(--warn);font-size:13px">★</span>{% endif %}
+              {% if upcoming_interviews.get(job.id) is not none %}
+              {% set days_left = upcoming_interviews[job.id] %}
+              <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;
+                {% if days_left == 0 %}background:var(--danger-light);color:var(--danger)
+                {% elif days_left <= 2 %}background:var(--warn-light);color:var(--warn)
+                {% else %}background:var(--success-light);color:var(--success){% endif %}">
+                {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}In {{ days_left }}d{% endif %}
+              </span>
+              {% endif %}
+            </div>
+            <div style="color:var(--text2);font-size:12px;margin-top:1px">{{ job.role }}</div>
+            {% if job.next_action %}
+            <div style="font-size:11px;color:var(--accent);margin-top:2px">→ {{ job.next_action }}</div>
+            {% endif %}
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            {% if job.applied_date %}
+            <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
+            {% endif %}
+            {% if job.offer_deadline %}
+            <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:40px 24px">
+    <div style="font-size:36px;margin-bottom:10px">🚀</div>
+    <p style="color:var(--text2);margin-bottom:14px">No active applications yet.</p>
+    <a href="{{ url_for('add_job') }}" class="btn btn-primary">Add your first job</a>
+  </div>
+  {% endif %}
+
+  </div><!-- end scrollable -->
+</div>
+
+<!-- Funnel — below pipeline, full width compact -->
+{% if total > 0 %}
+<div class="card" style="padding:16px 20px">
+  <div class="section-title">Conversion Funnel</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+  {% for label, cnt, color in funnel %}
+  {% set pct = (cnt / total * 100) | round(0) | int %}
+  <div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span style="color:var(--text2)">{{ label }}</span>
+      <span style="font-weight:700;color:var(--text)">{{ cnt }}</span>
+    </div>
+    <div style="background:var(--bg2);border-radius:99px;height:5px;overflow:hidden">
+      <div style="background:{{ color }};height:5px;width:{{ pct }}%;border-radius:99px;transition:width 0.5s ease"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">{{ pct }}%</div>
+  </div>
+  {% endfor %}
   </div>
 </div>
 {% endif %}
 
-<div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
-
-  <!-- Active Jobs -->
-  <div>
-    <h2 style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)">Active Pipeline</h2>
-    {% set active_statuses = ['phone_interview','technical_interview','final_interview','screening','applied'] %}
-    {% set has_active = namespace(v=false) %}
-    {% for s in active_statuses %}
-      {% if kanban[s] %}{% set has_active.v = true %}{% endif %}
-    {% endfor %}
-
-    {% if has_active.v %}
-    {% for s in active_statuses %}
-      {% if kanban[s] %}
-      <div style="margin-bottom:20px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-          {{ status_labels[s] }} <span style="background:var(--accent-light);color:var(--accent);border-radius:99px;padding:1px 8px;font-size:10px;font-weight:700">{{ kanban[s]|length }}</span>
-        </div>
-        {% for job in kanban[s][:5] %}
-        <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
-          <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
-               onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <span style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</span>
-                {% if job.starred %}<span style="color:var(--warn)">★</span>{% endif %}
-                {% if upcoming_interviews.get(job.id) is not none %}
-                {% set days_left = upcoming_interviews[job.id] %}
-                <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;
-                  {% if days_left == 0 %}background:#fef2f2;color:#dc2626
-                  {% elif days_left <= 2 %}background:#fff7ed;color:#c2410c
-                  {% else %}background:#f0fdf4;color:#15803d{% endif %}">
-                  {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}Interview in {{ days_left }}d{% endif %}
-                </span>
-                {% endif %}
-              </div>
-              <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
-              {% if job.next_action %}
-              <div style="font-size:11px;color:var(--accent);margin-top:3px">→ {{ job.next_action }}</div>
-              {% endif %}
-            </div>
-            {% if job.applied_date %}
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
-              {% if job.offer_deadline %}
-              <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
-              {% endif %}
-            </div>
-            {% endif %}
-          </div>
-        </a>
-        {% endfor %}
-        {% if kanban[s]|length > 5 %}
-        <div id="kanban-more-{{ s }}" style="display:none">
-          {% for job in kanban[s][5:] %}
-          <a href="{{ url_for('job_detail', job_id=job.id) }}" style="text-decoration:none">
-            <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow);transition:box-shadow 0.15s"
-                 onmouseover="this.style.boxShadow='var(--shadow-md)'" onmouseout="this.style.boxShadow='var(--shadow)'">
-              <div style="flex:1;min-width:0">
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                  <span style="font-weight:600;font-size:14px;color:var(--text)">{{ job.company }}</span>
-                  {% if job.starred %}<span style="color:var(--warn)">★</span>{% endif %}
-                </div>
-                <div style="color:var(--text2);font-size:13px;margin-top:1px">{{ job.role }}</div>
-              </div>
-              {% if job.applied_date %}
-              <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:11px;color:var(--text3)">{{ job.applied_date }}</div>
-              </div>
-              {% endif %}
-            </div>
-          </a>
-          {% endfor %}
-        </div>
-        <button onclick="toggleKanbanMore('{{ s }}')" id="kanban-toggle-{{ s }}"
-                class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:8px">
-          Show {{ kanban[s]|length - 5 }} more
-        </button>
-        {% endif %}
-      </div>
-      {% endif %}
-    {% endfor %}
-    {% else %}
-    <div class="card" style="padding:32px;text-align:center">
-      <div style="font-size:32px;margin-bottom:8px">🚀</div>
-      <p style="color:var(--text2);margin-bottom:12px">No active applications yet.</p>
-      <a href="{{ url_for('add_job') }}" class="btn btn-primary">Add your first job</a>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- Right: funnel + activity -->
-  <div>
-    <!-- Funnel -->
-    <div class="card" style="padding:16px;margin-bottom:16px">
-      <div class="section-title">Funnel</div>
-      {% if total > 0 %}
-      {% for label, cnt, color in funnel %}
-      {% set pct = (cnt / total * 100) | round(0) | int %}
-      <div style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
-          <span style="color:var(--text2)">{{ label }}</span>
-          <span style="font-weight:600">{{ cnt }}</span>
-        </div>
-        <div style="background:var(--bg2);border-radius:99px;height:6px;overflow:hidden">
-          <div style="background:{{ color }};height:6px;width:{{ pct }}%;border-radius:99px;transition:width 0.5s ease"></div>
-        </div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <p style="color:var(--text3);font-size:12px">No data yet.</p>
-      {% endif %}
-    </div>
-
-    <!-- Monthly chart -->
-    {% if monthly %}
-    <div class="card" style="padding:16px;margin-bottom:16px">
-      <div class="section-title">Monthly Applications</div>
-      {% set max_m = monthly | map(attribute='cnt') | max %}
-      <div style="display:flex;align-items:flex-end;gap:6px;height:64px">
-        {% for row in monthly | reverse %}
-        {% set h = ((row.cnt / max_m) * 52) | int %}
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-          <span style="font-size:10px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
-          <div style="background:linear-gradient(to top,var(--accent),var(--accent2));border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px;transition:height 0.3s ease"></div>
-          <span style="font-size:9px;color:var(--text3)">{{ row.month[5:] }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Recent Activity -->
-    <div class="card" style="padding:16px">
-      <div class="section-title">Recent Activity</div>
-      {% if activity %}
-      {% for ev in activity[:8] %}
-      <div style="display:flex;gap:10px;margin-bottom:10px;font-size:12px">
-        <div style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:5px;flex-shrink:0"></div>
-        <div>
-          <a href="{{ url_for('job_detail', job_id=ev.job_id) }}" style="font-weight:600;color:var(--text)">{{ ev.company }}</a>
-          <span style="color:var(--text2)"> — {{ ev.event }}</span>
-          <div style="color:var(--text3)">{{ ev.event_date or '' }}</div>
-        </div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <p style="color:var(--text3);font-size:12px">No activity yet.</p>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
 <script>
-function toggleKanbanMore(status) {
-  const moreDiv = document.getElementById('kanban-more-' + status);
-  const btn = document.getElementById('kanban-toggle-' + status);
-  if (!moreDiv || !btn) return;
-  const hidden = moreDiv.style.display === 'none';
-  moreDiv.style.display = hidden ? 'block' : 'none';
-  const extra = moreDiv.querySelectorAll('a').length;
-  btn.textContent = hidden ? 'Show less' : 'Show ' + extra + ' more';
-}
 </script>
 {% endblock %}

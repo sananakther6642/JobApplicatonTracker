@@ -658,7 +658,7 @@ function dismissGenTip() {
   if (el) { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }
 }
 document.addEventListener('DOMContentLoaded', () => {
-  if (!localStorage.getItem('genTipDismissed')) {
+  if (!localStorage.getItem('genTipDismissed') && !window.location.pathname.startsWith('/generate')) {
     const el = document.getElementById('gen-tip');
     if (el) setTimeout(() => el.style.display='flex', 800);
   }
