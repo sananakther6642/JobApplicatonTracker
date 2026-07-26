@@ -452,14 +452,13 @@
   <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
   <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
-  <button class="btn btn-secondary btn-sm" onclick="openQuickAdd()" title="Quick Add (Q)" style="margin-right:6px">⚡ Quick Add</button>
-  <a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
+<a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
      title="Generate from JD (G)"
      style="margin-right:6px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none;box-shadow:0 0 0 2px rgba(124,58,237,.25);position:relative">
     ✨ Generate
     {% if request.endpoint != 'generate_job' %}<span id="gen-pulse" style="position:absolute;top:-4px;right:-4px;width:8px;height:8px;background:#f59e0b;border-radius:50%;animation:pulse-dot 1.6s ease-in-out infinite"></span>{% endif %}
   </a>
-  <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
+  <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)" style="margin-right:10px">+ Add Job</a>
 </nav>
 
 <!-- Generate tip banner (first visit, not on generate page) -->
@@ -473,46 +472,6 @@
 <!-- Toast container -->
 <div id="toast-container"></div>
 
-<!-- Quick Add Modal -->
-<div id="quick-add-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:center;justify-content:center">
-  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:420px;box-shadow:var(--shadow-lg);margin:16px;border:1px solid var(--border)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <span style="font-weight:700;font-size:15px">⚡ Quick Add</span>
-      <button onclick="closeQuickAdd()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;line-height:1">×</button>
-    </div>
-    <form method="post" action="{{ url_for('quick_add') }}" id="quick-add-form">
-      <div class="form-row" style="margin-bottom:14px">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Company *</label>
-          <input class="form-input" type="text" name="company" id="qa-company" required placeholder="Google">
-        </div>
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Role *</label>
-          <input class="form-input" type="text" name="role" id="qa-role" required placeholder="Senior SWE">
-        </div>
-      </div>
-      <div class="form-row" style="margin-bottom:16px">
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Status</label>
-          <select class="form-input" name="status">
-            <option value="applied">Applied</option>
-            <option value="screening">Screening</option>
-            <option value="phone_interview">Phone Interview</option>
-            <option value="offer">Offer</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin:0">
-          <label class="form-label">Source</label>
-          <input class="form-input" type="text" name="source" placeholder="LinkedIn">
-        </div>
-      </div>
-      <div style="display:flex;gap:10px">
-        <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">Save</button>
-        <button type="button" onclick="closeQuickAdd()" class="btn btn-secondary">Cancel</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 <div class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -584,20 +543,6 @@ function undoToast(btn) {
   dismissToast(toast);
 }
 
-// Quick Add modal
-function openQuickAdd() {
-  const m = document.getElementById('quick-add-modal');
-  m.style.display = 'flex';
-  setTimeout(() => document.getElementById('qa-company').focus(), 50);
-}
-function closeQuickAdd() {
-  document.getElementById('quick-add-modal').style.display = 'none';
-  document.getElementById('quick-add-form').reset();
-}
-document.addEventListener('click', e => {
-  const modal = document.getElementById('quick-add-modal');
-  if (modal && e.target === modal) closeQuickAdd();
-});
 
 // Browser notifications for follow-up reminders
 function requestNotificationPermission() {
@@ -640,14 +585,12 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
   if (e.key === 'n' || e.key === 'N') window.location.href = '/add';
-  if (e.key === 'q' || e.key === 'Q') openQuickAdd();
   if (e.key === 'g' || e.key === 'G') window.location.href = '/generate';
   if (e.key === 'd' || e.key === 'D') window.location.href = '/';
   if (e.key === 'j' || e.key === 'J') window.location.href = '/applications';
   if (e.key === 's' || e.key === 'S') window.location.href = '/stats';
   if (e.key === 'Escape') {
     document.querySelectorAll('.status-dropdown').forEach(d => d.remove());
-    closeQuickAdd();
   }
 });
 

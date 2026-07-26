@@ -83,77 +83,77 @@ const STATUS_CLASS_MAP = {
 
 {% if jobs %}
 <form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
-  <div id="job-card-list" style="display:flex;flex-direction:column;gap:8px">
+  <div id="job-card-list" style="display:flex;flex-direction:column;gap:10px">
     {% for job in jobs %}
     {% set d_ago = days_ago.get(job.id) %}
     {% set sc = {'applied':'applied','screening':'screening','phone_interview':'phone','technical_interview':'technical','final_interview':'final','offer':'offer','rejected':'rejected','withdrawn':'withdrawn','ghosted':'ghosted'} %}
-    <div class="card job-card-row s-card-{{ sc.get(job.status,'ghosted') }}" id="job-card-{{ job.id }}" style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-left:3px solid transparent;transition:border-color 0.15s,box-shadow 0.2s">
-      <!-- Checkbox -->
-      <input type="checkbox" name="job_ids" value="{{ job.id }}"
-             class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
-             onchange="updateBulkBar()">
+    <div class="card job-card-row s-card-{{ sc.get(job.status,'ghosted') }}" id="job-card-{{ job.id }}"
+         style="padding:20px 22px 18px;border-left:4px solid transparent;transition:border-color 0.15s,box-shadow 0.2s">
 
-      <!-- Star (fetch to avoid nested form) -->
-      <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
-              data-starred="{{ '1' if job.starred else '0' }}"
-              data-company="{{ job.company | e }}"
-              onclick="toggleStar(this, {{ job.id }})">
-        {{ '★' if job.starred else '☆' }}
-      </button>
+      <!-- Top row: checkbox + star + company + status + actions -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <input type="checkbox" name="job_ids" value="{{ job.id }}"
+               class="job-cb" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;opacity:0.4"
+               onchange="updateBulkBar()">
 
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:15px">{{ job.company }}</span>
-          {% if job.interest_score and job.interest_score > 0 %}
-          {{ render_stars(job.interest_score) }}
-          {% endif %}
-          <!-- Inline status badge — clickable -->
-          <span class="badge {{ status_class(job.status) }} status-badge"
-                style="cursor:pointer;position:relative"
-                data-job-id="{{ job.id }}"
-                data-status="{{ job.status }}"
-                title="Click to change status"
-                onclick="openStatusDropdown(event, this)">{{ status_labels[job.status] }}</span>
+        <!-- Star LEFT of company -->
+        <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
+                data-starred="{{ '1' if job.starred else '0' }}"
+                data-company="{{ job.company | e }}"
+                onclick="toggleStar(this, {{ job.id }})"
+                style="font-size:17px;padding:0;line-height:1;flex-shrink:0;color:{% if job.starred %}#f59e0b{% else %}var(--border2){% endif %}">★</button>
+
+        <span style="font-weight:700;font-size:16px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ job.company }}</span>
+
+        <span class="badge {{ status_class(job.status) }} status-badge"
+              style="cursor:pointer;position:relative;flex-shrink:0"
+              data-job-id="{{ job.id }}" data-status="{{ job.status }}"
+              title="Click to change status"
+              onclick="openStatusDropdown(event, this)">{{ status_labels[job.status] }}</span>
+
+        {% if job.interest_score and job.interest_score > 0 %}
+        <span style="flex-shrink:0">{{ render_stars(job.interest_score) }}</span>
+        {% endif %}
+
+        <!-- Actions -->
+        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:4px">
+          <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
+          <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+          <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 8px"
+                  onclick="deleteJob({{ job.id }}, {{ job.company | tojson | e }})">🗑</button>
+        </div>
+      </div>
+
+      <!-- Bottom row: role · location · salary  |  date + source -->
+      <div style="display:flex;align-items:flex-end;gap:10px;padding-left:24px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:{% if tags_by_job.get(job.id) %}6px{% else %}0{% endif %}">
+            <span style="font-weight:500;color:var(--text)">{{ job.role }}</span>
+            {% if job.location %}<span style="color:var(--text3)"> · {{ job.location }}</span>{% endif %}
+            {% if job.salary_range %}<span style="color:var(--text3)"> · {{ job.salary_range }}</span>{% endif %}
+          </div>
           {% if tags_by_job.get(job.id) %}
-          <span style="display:flex;gap:4px;flex-wrap:wrap">
-            {% for tag in tags_by_job[job.id] %}
-            <a href="{{ url_for('index', tag=tag) }}" class="tag-pill">#{{ tag }}</a>
+          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:{% if job.next_action %}5px{% else %}0{% endif %}">
+            {% for tag in tags_by_job.get(job.id, []) %}
+            <a href="{{ url_for('index', tag=tag) }}" class="tag-pill" style="font-size:10px;padding:1px 7px">#{{ tag }}</a>
             {% endfor %}
-          </span>
+          </div>
+          {% endif %}
+          {% if job.next_action %}
+          <div style="font-size:11.5px;color:var(--accent);font-weight:600;margin-top:3px">→ {{ job.next_action }}</div>
           {% endif %}
         </div>
-        <div style="color:var(--text2);font-size:13px">
-          {{ job.role }}
-          {% if job.location %} · <span style="color:var(--text3)">{{ job.location }}</span>{% endif %}
-          {% if job.salary_range %} · <span style="color:var(--text3)">{{ job.salary_range }}</span>{% endif %}
-        </div>
-        {% if job.next_action %}
-        <div style="font-size:11px;color:var(--accent);margin-top:3px">→ {{ job.next_action }}</div>
-        {% endif %}
-      </div>
 
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;color:var(--text2)">
-          {{ job.applied_date or '—' }}
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:12px;color:var(--text2);font-weight:500">{{ job.applied_date or '—' }}</div>
           {% if d_ago is not none %}
-          <span style="font-size:11px;font-weight:600;margin-left:4px;
-            {% if d_ago <= 7 %}color:var(--success){% elif d_ago <= 14 %}color:var(--warn){% else %}color:var(--danger){% endif %}">
-            ({{ d_ago }}d)
-          </span>
+          <div style="font-size:11px;font-weight:700;{% if d_ago <= 7 %}color:var(--success){% elif d_ago <= 14 %}color:var(--warn){% else %}color:var(--danger){% endif %}">{{ d_ago }}d ago</div>
           {% endif %}
+          {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
+          {% if job.offer_deadline %}<div style="font-size:11px;color:var(--danger);font-weight:700">⏳ {{ job.offer_deadline }}</div>{% endif %}
         </div>
-        {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
-        {% if job.offer_deadline %}
-        <div style="font-size:11px;color:var(--danger);font-weight:600">⏳ {{ job.offer_deadline }}</div>
-        {% endif %}
       </div>
 
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
-        <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
-        <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 9px"
-                onclick="deleteJob({{ job.id }}, {{ job.company | tojson | e }})">🗑</button>
-      </div>
     </div>
     {% endfor %}
   </div>

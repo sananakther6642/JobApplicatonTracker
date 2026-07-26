@@ -67,13 +67,14 @@
       <div class="section-title">Monthly Applications</div>
       {% if monthly %}
       {% set max_m = monthly | map(attribute='cnt') | max %}
+      {% set mn = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'} %}
       <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
         {% for row in monthly | reverse %}
         {% set h = ((row.cnt / max_m) * 68) | int if max_m > 0 else 0 %}
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
           <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
           <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
-          <span style="font-size:10px;color:var(--text3)">{{ row.month[5:] }}</span>
+          <span style="font-size:10px;color:var(--text3)">{{ mn.get(row.month[5:], row.month[5:]) }}</span>
         </div>
         {% endfor %}
       </div>
