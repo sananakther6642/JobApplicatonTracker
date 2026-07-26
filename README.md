@@ -18,7 +18,7 @@ Local job application tracker built with Flask + SQLite. Runs entirely on your m
 - **Interview rounds** — per-round notes, questions asked, outcome
 - **Interview prep checklist** — per-job checklist with default items, progress bar
 - **Salary negotiation tracker** — initial offer, counter, final amount per job
-- **Contact book** — shared recruiter/contact directory (searchable, reusable across jobs)
+- **Contact book** — shared recruiter/contact directory; auto-populated from recruiter fields when saving a job
 - **Tags** — comma-separated, filterable pills
 - **Star / priority** — mark high-interest jobs
 - **Interest score** — 1–5 star rating per job
@@ -52,7 +52,7 @@ Local job application tracker built with Flask + SQLite. Runs entirely on your m
 - **Bulk delete** — select and delete with 5s undo toast
 - **Undo delete** — 5-second window to undo single-job deletes
 - **Print view** — clean printable summary per job
-- **Email templates** — 7 pre-written (follow-up, thank you, negotiate, decline, feedback request)
+- **Email templates** — 7 pre-written (follow-up, thank you, negotiate, decline, feedback request); click placeholders for smart suggestions from your jobs; logs to job timeline on copy
 - **Offer comparison** — side-by-side table of active offers, highest salary highlighted
 - **Salary comparison** — all jobs with salary data, grouped by status
 
@@ -160,3 +160,37 @@ See `api.txt` for all fields and more examples.
 | `J` | All Jobs |
 | `S` | Stats |
 | `Esc` | Close dropdowns / modal |
+
+## Contributing
+
+Open source — MIT License. Contributions welcome.
+
+Found a bug or want a feature? Fork the repo, make your changes on a branch, and open a PR.
+
+```bash
+# 1. Fork on GitHub
+# 2. Clone your fork
+git clone https://github.com/<your-username>/jat.git
+cd jat
+
+# 3. Create a branch
+git checkout -b fix/your-bug-description
+
+# 4. Make changes, test locally
+./start.sh
+
+# 5. Push and open a PR against the features branch
+git push origin fix/your-bug-description
+```
+
+**Guidelines:**
+- Target the `features` branch, not `master`
+- Keep PRs focused — one fix or feature per PR
+- Test with `./start.sh` before submitting
+- If you find a bug but can't fix it, open a GitHub issue
+
+## License
+
+MIT License — free to use, modify, and distribute.
+
+See [LICENSE](LICENSE) for full text.

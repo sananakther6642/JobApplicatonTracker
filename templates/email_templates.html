@@ -246,12 +246,16 @@ function appendItem(s) {
   el.dataset.val = s.label;
   el.innerHTML = `<span class="ph-sugg-label">${escHTML(s.label)}</span>${s.sub ? `<span class="ph-sugg-sub">${escHTML(s.sub)}</span>` : ''}`;
   el.addEventListener('mousedown', e => {
-    e.preventDefault();
+    e.preventDefault(); // prevent input losing focus
     if (_activeInput) {
       _activeInput.value = s.label;
-      _activeInput.dispatchEvent(new Event('blur'));
+      // manually commit then close — do NOT dispatch blur (races with blur timer)
+      const inp = _activeInput;
+      const ph  = inp._ph;
+      const cid = inp._cid;
+      closeDropdown();
+      if (ph && cid) commit(inp, ph, cid);
     }
-    closeDropdown();
   });
   DD.appendChild(el);
 }
@@ -304,6 +308,8 @@ function activatePlaceholder(span, containerId) {
   input.value = '';
   input.placeholder = placeholder.replace(/^\[|\]$/g, '');
   input.size = Math.max(input.placeholder.length, 8);
+  input._ph  = placeholder;   // stash for mousedown handler
+  input._cid = containerId;
   span.replaceWith(input);
   input.focus();
 

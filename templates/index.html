@@ -425,6 +425,8 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
       badge.dataset.status = data.status;
       badge.textContent = data.label;
       badge.setAttribute('title', 'Click to change status');
+    } else {
+      showToast(data.error || 'Status update failed — please reload', null, 4000);
     }
   }).catch(() => showToast('Status update failed — please reload', null, 4000));
 }
