@@ -64,8 +64,26 @@ _AI_SYSTEM_PROMPT = (
     "recruiter_name, recruiter_email, recruiter_phone — reply with ONLY the line number "
     "that contains that information, or null if no line contains it. "
     "NEVER write the value yourself, ONLY point to a line number. "
+    "Only pick a line if it is CLEARLY and DIRECTLY that field (e.g. the line IS a job "
+    "title, IS a company name, IS a phone number). If the field is only mentioned in "
+    "passing inside a longer sentence about something else, or you are not confident, "
+    "use null instead of guessing. "
     'Output ONLY one JSON object, e.g. {"company": 4, "role": 1, "location": null, '
     '"salary_range": 3, "recruiter_name": null, "recruiter_email": null, "recruiter_phone": null}.'
+)
+
+# Second pass: a much simpler yes/no check per field than the original
+# multi-field line selection — asking "is this line REALLY the company name?"
+# in isolation is an easier judgment for a small model than "which of these
+# 80 lines is the company", so it catches misplacements the first pass missed
+# (e.g. picking a sentence that merely mentions the company in passing).
+_AI_VERIFY_PROMPT = (
+    "You will be shown field:line pairs from a job posting. For each pair, answer "
+    "true ONLY if that exact line clearly and directly IS that field's value (e.g. it "
+    "IS a job title, IS a company name, IS a phone number). Answer false if the line "
+    "merely mentions the topic in passing, is a sentence about something else, or "
+    "doesn't cleanly represent that field on its own. "
+    'Output ONLY one JSON object, e.g. {"company": true, "role": false, ...}.'
 )
 
 _LABEL_STRIP_RE = re.compile(
@@ -226,13 +244,26 @@ def _looks_like_person_name(v: str) -> bool:
 # model pointed at just because it happens to be genuine JD text.
 _PROSE_PRONOUNS_RE = re.compile(r"(?i:\b(?:we|we're|we'll|you|you'll|you're|our|us|i'm)\b)")
 
+# A heading never uses a verb describing what the company/org IS DOING
+# (hiring, seeking, looking for, expanding, founded, based, etc.) — that's
+# always a descriptive sentence ABOUT the company, not the field itself. This
+# specifically catches lines like "Acme Robotics GmbH is hiring in Berlin,
+# Germany." being mistaken for a role/title — confirmed in testing that the
+# model can confidently misjudge this even when asked to double-check itself,
+# so it's enforced deterministically here instead of relying on the model.
+_DESCRIPTIVE_SENTENCE_RE = re.compile(
+    r"(?i:\bis\s+hiring\b|\bare\s+hiring\b|\bis\s+looking\s+for\b|\bis\s+seeking\b|"
+    r"\bare\s+seeking\b|\bhas\s+been\b|\bhave\s+been\b|\bis\s+a\s+|\bis\s+an\s+|"
+    r"\bwas\s+founded\b|\bis\s+expanding\b)"
+)
+
 
 def _looks_like_a_heading(v: str) -> bool:
     if not v:
         return True  # nothing to check — an empty pick is always fine
     if "@" in v:
         return False
-    if _PROSE_PRONOUNS_RE.search(v):
+    if _PROSE_PRONOUNS_RE.search(v) or _DESCRIPTIVE_SENTENCE_RE.search(v):
         return False
     if v.rstrip().endswith((".", "!", "?")) and len(v.split()) > 8:
         return False
@@ -288,6 +319,12 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
 
         if cleaned.get("salary_range") and not _looks_like_salary(cleaned["salary_range"]):
             cleaned["salary_range"] = ""
+        # A company/role/location line that IS a salary figure (e.g. the
+        # model duplicating the salary line into "company" too — observed in
+        # testing) is never legitimate; drop it from those fields.
+        for field in ("company", "role", "location"):
+            if cleaned.get(field) and _looks_like_salary(cleaned[field]):
+                cleaned[field] = ""
         if cleaned.get("recruiter_phone") and not _looks_like_phone(cleaned["recruiter_phone"]):
             cleaned["recruiter_phone"] = ""
         if cleaned.get("recruiter_email") and not _looks_like_email(cleaned["recruiter_email"]):
@@ -302,6 +339,12 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
             if val and (len(val) > 100 or not _looks_like_a_heading(val)):
                 cleaned[field] = ""
 
+        # Second pass: re-confirm each surviving candidate with a focused
+        # yes/no question rather than trusting the first pass's line-picking
+        # alone — catches the model having selected a real-but-wrong line
+        # (e.g. a sentence that only mentions the company in passing).
+        cleaned = _verify_selections(cleaned, model, timeout)
+
         return cleaned, "ok"
     except urllib.error.URLError as e:
         global _ollama_ready
@@ -309,6 +352,43 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
         return None, f"Ollama request failed: {e}"
     except Exception as e:
         return None, f"AI extraction failed: {e}"
+
+
+def _verify_selections(cleaned: dict, model: str, timeout: float) -> dict:
+    """Ask the model to confirm each candidate value actually IS the field it
+    was assigned to. Best-effort: if this second call fails for any reason
+    (timeout, Ollama hiccup, bad JSON), the original picks are kept as-is
+    rather than losing otherwise-good results to a flaky follow-up request."""
+    candidates = {f: v for f, v in cleaned.items() if v}
+    if not candidates:
+        return cleaned
+    prompt = "\n".join(f"{f}: {v}" for f, v in candidates.items())
+    payload = {
+        "model": model,
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": _AI_VERIFY_PROMPT},
+            {"role": "user", "content": prompt[:4000]},
+        ],
+    }
+    try:
+        resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
+        content = resp.get("message", {}).get("content", "")
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            return cleaned
+        for field in candidates:
+            verdict = data.get(field)
+            rejected = verdict is False or (
+                isinstance(verdict, str) and verdict.strip().lower() in ("false", "no", "0")
+            )
+            if rejected:
+                cleaned[field] = ""
+    except Exception:
+        pass  # verification is best-effort; keep the first pass's picks
+    return cleaned
 
 
 # ── Field extractors ──────────────────────────────────────────────────────────
