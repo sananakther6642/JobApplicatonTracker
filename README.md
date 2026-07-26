@@ -28,8 +28,8 @@ JAT is a local-first job application tracker. Run it on your machine, open it in
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
-pip3 install flask flask-login
+# 1. Install the only dependency
+pip3 install flask
 
 # 2. Run
 ./start.sh
