@@ -37,7 +37,7 @@
         </div>
       </div>
 
-      <button type="submit" class="btn btn-primary" style="width:100%;padding:11px">
+      <button type="submit" class="btn btn-primary" id="generate-btn" style="width:100%;padding:11px">
         ⚡ Generate JSON
       </button>
     </form>
@@ -61,10 +61,9 @@
     </div>
     {% endif %}
 
-    {% if result %}
     <div class="card" style="padding:24px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div style="font-weight:700;font-size:14px">Generated JSON</div>
+        <div style="font-weight:700;font-size:14px">{{ 'Generated JSON' if result else 'Job JSON' }}</div>
         <div style="display:flex;gap:8px">
           <button onclick="copyJSON()" class="btn btn-ghost btn-sm" id="copy-btn">📋 Copy</button>
           <button onclick="pushJob()" class="btn btn-primary btn-sm" id="push-btn">🚀 Push to Tracker</button>
@@ -75,23 +74,59 @@
 
       <textarea id="json-output" rows="26"
         style="width:100%;font-family:monospace;font-size:12px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;line-height:1.5;box-sizing:border-box"
-        spellcheck="false">{{ result }}</textarea>
+        spellcheck="false">{{ result or empty_template }}</textarea>
 
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Edit fields directly before pushing. Required: company + role.</div>
-    </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">
+        {% if result %}Edit fields directly before pushing.{% else %}No JD generated yet — paste one and click Generate, or edit/paste JSON here directly.{% endif %}
+        Required: company + role.
+      </div>
 
-    {% else %}
-    <div class="card" style="padding:32px;text-align:center;color:var(--text3)">
-      <div style="font-size:32px;margin-bottom:12px">📋</div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:6px">No output yet</div>
-      <div style="font-size:13px">Paste a JD and click Generate</div>
+      <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(217,119,6,0.1);border:1px solid rgba(217,119,6,0.35);font-size:12px;color:var(--text2);line-height:1.5">
+        ⚠️ <strong>Heads up:</strong> auto-extracted fields (regex and especially the
+        local AI assist) can occasionally be wrong or hallucinated — e.g. an
+        invented company, phone number, or salary. Always review every field
+        once before pushing to the tracker.
+      </div>
     </div>
-    {% endif %}
   </div>
 
 </div>
 
+<!-- Full-screen "Generating…" overlay — shown immediately on submit so a
+     slower AI-assisted extraction never looks like the page just froze. -->
+<div id="generate-overlay" style="
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:rgba(15,15,20,0.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  align-items:center; justify-content:center;">
+  <div class="card" style="padding:32px 40px;text-align:center;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+    <div id="generate-spinner" style="
+      width:36px;height:36px;margin:0 auto 18px;border-radius:50%;
+      border:3px solid var(--border2);border-top-color:var(--accent);
+      animation:jat-spin 0.8s linear infinite;"></div>
+    <div style="font-weight:700;font-size:15px;margin-bottom:8px">Generating…</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6">
+      Usually instant. If this JD's format is unusual, the offline AI assist may
+      kick in and take up to ~30–60s — please keep this tab open.
+    </div>
+  </div>
+</div>
+<style>
+@keyframes jat-spin { to { transform: rotate(360deg); } }
+</style>
+
 <script>
+// Give clear feedback on submit instead of leaving the page looking "stuck":
+// most JDs finish in well under a second (regex-only), but if the JD's format
+// is unusual the local AI gap-filler can kick in and take up to roughly a
+// minute — the button/status text explains that instead of just going silent.
+document.getElementById('gen-form').addEventListener('submit', function () {
+  const btn = document.getElementById('generate-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
+  const overlay = document.getElementById('generate-overlay');
+  overlay.style.display = 'flex';
+});
+
 function copyJSON() {
   const ta = document.getElementById('json-output');
   if (!ta) return;

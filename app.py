@@ -662,6 +662,16 @@ def add_job():
     )
 
 
+EMPTY_JOB_TEMPLATE = {
+    "company": "", "role": "", "status": "applied",
+    "applied_date": "", "source": "", "location": "", "salary_range": "",
+    "jd": "", "job_url": "", "tags": "", "interest_score": "3", "notes": "",
+    "next_action": "Follow up in 1 week", "follow_up_date": "", "offer_deadline": "",
+    "resume_version": "", "recruiter_name": "", "recruiter_email": "",
+    "recruiter_phone": "", "recruiter_linkedin": "",
+}
+
+
 @app.route("/generate", methods=["GET", "POST"])
 def generate_job():
     result = None
@@ -669,6 +679,7 @@ def generate_job():
     warnings = []
     if request.method == "POST":
         try:
+            import gen_job
             from gen_job import generate, pdf_to_text
             import tempfile
 
@@ -710,10 +721,34 @@ def generate_job():
                 import json as _json
                 data = generate(jd_text, cv_text, cover_text, cv_name, "")
                 result = _json.dumps(data, indent=2, ensure_ascii=False)
+                ai_status = gen_job.LAST_AI_STATUS
+                if ai_status == "ok":
+                    warnings.append(
+                        "Some fields were blank after regex extraction — filled in "
+                        f"using the local AI model ({gen_job.AI_MODEL}, offline). "
+                        "Double-check AI-filled fields before pushing."
+                    )
+                elif ai_status and ai_status != "skipped (regex found company and role)":
+                    warnings.append(
+                        f"Some fields were left blank and the local AI model couldn't "
+                        f"fill them in ({ai_status}). Run 'ollama serve' to enable "
+                        "AI-assisted extraction, or fill those fields in manually."
+                    )
         except Exception as e:
             error = str(e)
 
-    return render_template("generate.html", result=result, error=error, warnings=warnings)
+    if not result:
+        import json as _json
+        template = dict(EMPTY_JOB_TEMPLATE)
+        template["applied_date"] = date.today().isoformat()
+        empty_template = _json.dumps(template, indent=2, ensure_ascii=False)
+    else:
+        empty_template = None
+
+    return render_template(
+        "generate.html", result=result, empty_template=empty_template,
+        error=error, warnings=warnings,
+    )
 
 
 @app.route("/api/job", methods=["POST"])
@@ -1959,4 +1994,7 @@ def edit_contact(contact_id):
 init_db()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    # threaded=True so a slow local-AI extraction request (can take tens of
+    # seconds — see gen_job.ai_extract_fields) doesn't freeze the whole app
+    # for other pages/tabs while it's running.
+    app.run(debug=True, port=5050, threaded=True)
