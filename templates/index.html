@@ -14,7 +14,7 @@
 {% block content %}
 
 <div class="page-header">
-  <h1>All Jobs <span style="font-size:14px;font-weight:400;color:var(--text2)">({{ total_count }})</span></h1>
+  <h1>All Jobs <span id="results-count" style="font-size:14px;font-weight:400;color:var(--text2)">({{ total_count }})</span></h1>
   <a href="{{ url_for('add_job') }}" class="btn btn-primary">+ Add Job</a>
 </div>
 
@@ -23,14 +23,15 @@
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <input type="text" name="search" value="{{ current_search }}"
            placeholder="Search company, role, JD…"
-           id="search-input"
+           id="search-input" autocomplete="off"
            class="form-input" style="flex:1;min-width:180px;padding:8px 12px">
-    <select name="sort" class="form-input" style="width:160px">
+    <span id="search-spinner" style="display:none;align-self:center;font-size:12px;color:var(--text3)">Searching…</span>
+    <select name="sort" id="sort-select" class="form-input" style="width:160px">
       <option value="applied_date" {% if current_sort=='applied_date' %}selected{% endif %}>Date Applied</option>
       <option value="company"      {% if current_sort=='company' %}selected{% endif %}>Company</option>
       <option value="status"       {% if current_sort=='status' %}selected{% endif %}>Status</option>
     </select>
-    <select name="order" class="form-input" style="width:130px">
+    <select name="order" id="order-select" class="form-input" style="width:130px">
       <option value="desc" {% if current_order=='desc' %}selected{% endif %}>Newest First</option>
       <option value="asc"  {% if current_order=='asc' %}selected{% endif %}>Oldest First</option>
     </select>
@@ -41,7 +42,7 @@
   </div>
 
   <!-- Status pills + starred + tags -->
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
+  <div id="filter-pills" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
     <a href="{{ url_for('index', search=current_search, sort=current_sort, order=current_order) }}"
        style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);color:var(--text2);text-decoration:none;{% if not current_status and not starred_only and not current_tag %}background:var(--text);color:var(--white);border-color:var(--text);{% endif %}">
       All ({{ counts.total }})
@@ -81,6 +82,7 @@ const STATUS_CLASS_MAP = {
 };
 </script>
 
+<div id="results-container">
 {% if jobs %}
 <form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
   <div id="job-card-list" style="display:flex;flex-direction:column;gap:10px">
@@ -88,40 +90,42 @@ const STATUS_CLASS_MAP = {
     {% set d_ago = days_ago.get(job.id) %}
     {% set sc = {'applied':'applied','screening':'screening','phone_interview':'phone','technical_interview':'technical','final_interview':'final','offer':'offer','rejected':'rejected','withdrawn':'withdrawn','ghosted':'ghosted'} %}
     <div class="card job-card-row s-card-{{ sc.get(job.status,'ghosted') }}" id="job-card-{{ job.id }}"
-         style="padding:20px 22px 18px;border-left:4px solid transparent;transition:border-color 0.15s,box-shadow 0.2s">
+         style="padding:20px 22px 18px;border-left:4px solid transparent;transition:border-color 0.15s,box-shadow 0.2s;cursor:pointer"
+         onclick="window.location.href='{{ url_for('job_detail', job_id=job.id) }}'">
 
       <!-- Top row: checkbox + star + company + status + actions -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <input type="checkbox" name="job_ids" value="{{ job.id }}"
-               class="job-cb" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;opacity:0.4"
-               onchange="updateBulkBar()">
+<input type="checkbox" name="job_ids" value="{{ job.id }}"
+                class="job-cb" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;opacity:0.4"
+                onchange="updateBulkBar()" onclick="event.stopPropagation()">
 
         <!-- Star LEFT of company -->
-        <button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
-                data-starred="{{ '1' if job.starred else '0' }}"
-                data-company="{{ job.company | e }}"
-                onclick="toggleStar(this, {{ job.id }})"
-                style="font-size:17px;padding:0;line-height:1;flex-shrink:0;color:{% if job.starred %}#f59e0b{% else %}var(--border2){% endif %}">★</button>
+<button type="button" class="star-btn" title="{% if job.starred %}Unstar{% else %}Star{% endif %}"
+                 data-starred="{{ '1' if job.starred else '0' }}"
+                 data-company="{{ job.company | e }}"
+                 onclick="toggleStar(this, {{ job.id }}); event.stopPropagation()"
+                 style="font-size:17px;padding:0;line-height:1;flex-shrink:0;color:{% if job.starred %}#f59e0b{% else %}var(--border2){% endif %}">★</button>
 
         <span style="font-weight:700;font-size:16px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ job.company }}</span>
 
-        <span class="badge {{ status_class(job.status) }} status-badge"
-              style="cursor:pointer;position:relative;flex-shrink:0"
-              data-job-id="{{ job.id }}" data-status="{{ job.status }}"
-              title="Click to change status"
-              onclick="openStatusDropdown(event, this)">{{ status_labels[job.status] }}</span>
+<span class="badge {{ status_class(job.status) }} status-badge"
+               style="cursor:pointer;position:relative;flex-shrink:0"
+               data-job-id="{{ job.id }}" data-status="{{ job.status }}"
+               title="Click to change status"
+               onclick="openStatusDropdown(event, this); event.stopPropagation()">{{ status_labels[job.status] }}</span>
 
         {% if job.interest_score and job.interest_score > 0 %}
         <span style="flex-shrink:0">{{ render_stars(job.interest_score) }}</span>
         {% endif %}
 
         <!-- Actions -->
-        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:4px">
-          <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
-          <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
-          <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 8px"
-                  onclick="deleteJob({{ job.id }}, {{ job.company | tojson | e }})">🗑</button>
-        </div>
+<div style="display:flex;gap:6px;flex-shrink:0;margin-left:4px">
+           <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">View</a>
+           <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">Edit</a>
+           <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 8px"
+                   data-company="{{ job.company | e }}"
+                   onclick="deleteJob({{ job.id }}, this.dataset.company); event.stopPropagation()">🗑</button>
+         </div>
       </div>
 
       <!-- Bottom row: role · location · salary  |  date + source -->
@@ -134,9 +138,9 @@ const STATUS_CLASS_MAP = {
           </div>
           {% if tags_by_job.get(job.id) %}
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:{% if job.next_action %}5px{% else %}0{% endif %}">
-            {% for tag in tags_by_job.get(job.id, []) %}
-            <a href="{{ url_for('index', tag=tag) }}" class="tag-pill" style="font-size:10px;padding:1px 7px">#{{ tag }}</a>
-            {% endfor %}
+{% for tag in tags_by_job.get(job.id, []) %}
+             <a href="{{ url_for('index', tag=tag) }}" class="tag-pill" style="font-size:10px;padding:1px 7px" onclick="event.stopPropagation()">#{{ tag }}</a>
+             {% endfor %}
           </div>
           {% endif %}
           {% if job.next_action %}
@@ -217,6 +221,7 @@ const STATUS_CLASS_MAP = {
   {% endif %}
 </div>
 {% endif %}
+</div>
 
 <script>
 function updateBulkBar() {
@@ -304,7 +309,7 @@ function deleteJob(jobId, company) {
   if (msgSpan) msgSpan.innerHTML = `Deleted <strong>${company}</strong>`;
   undoBtn.onclick = undoDelete;
 
-  deleteTimer = setTimeout(doDelete, 5000);
+  deleteTimer = setTimeout(doDelete, 1200);
   toast._timer = deleteTimer;
   toast._undoCallback = undoDelete;
 }
@@ -362,7 +367,7 @@ function bulkDelete() {
   }
 
   undoBtn.onclick = undoBulk;
-  let deleteTimer = setTimeout(doDelete, 5000);
+  let deleteTimer = setTimeout(doDelete, 1200);
   toast._timer = deleteTimer;
 }
 
@@ -431,6 +436,83 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
     }
   }).catch(() => showToast('Status update failed — please reload', null, 4000));
 }
+
+// ---------------------------------------------------------------------------
+// Dynamic (live) search — filters as you type instead of requiring a full
+// page reload. Other controls (sort/order) update immediately on change;
+// pressing Enter or clicking "Search" still works too, just via the same
+// AJAX path instead of a full navigation. Status/tag/starred filters are
+// preserved from whatever the current page was already showing.
+// ---------------------------------------------------------------------------
+const CURRENT_FILTERS = {
+  status: {{ current_status | tojson }},
+  tag: {{ current_tag | tojson }},
+  starred: {{ ('1' if starred_only else '') | tojson }},
+};
+
+function buildFilterURL() {
+  const params = new URLSearchParams();
+  const search = document.getElementById('search-input').value.trim();
+  if (search) params.set('search', search);
+  params.set('sort', document.getElementById('sort-select').value);
+  params.set('order', document.getElementById('order-select').value);
+  if (CURRENT_FILTERS.status) params.set('status', CURRENT_FILTERS.status);
+  if (CURRENT_FILTERS.tag) params.set('tag', CURRENT_FILTERS.tag);
+  if (CURRENT_FILTERS.starred) params.set('starred', CURRENT_FILTERS.starred);
+  return '{{ url_for("index") }}?' + params.toString();
+}
+
+let searchRequestToken = 0;
+function applyFilters(pushHistory) {
+  const url = buildFilterURL();
+  const token = ++searchRequestToken;
+  const spinner = document.getElementById('search-spinner');
+  spinner.style.display = 'inline';
+
+  fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+    .then(r => r.text())
+    .then(html => {
+      if (token !== searchRequestToken) return; // a newer request already superseded this one
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const newResults = doc.getElementById('results-container');
+      const newCount = doc.getElementById('results-count');
+      if (newResults) document.getElementById('results-container').innerHTML = newResults.innerHTML;
+      if (newCount) document.getElementById('results-count').textContent = newCount.textContent;
+      if (pushHistory) history.pushState(null, '', url);
+    })
+    .catch(() => showToast('Search failed — please reload', null, 4000))
+    .finally(() => { if (token === searchRequestToken) spinner.style.display = 'none'; });
+}
+
+// The status/starred/tag pills are outside #results-container (their counts
+// are global, not filtered) so they aren't refreshed by applyFilters() — but
+// their href="...&search=..." would go stale as the user types. Keep them
+// pointed at whatever's currently in the search box.
+function syncPillLinks() {
+  const search = document.getElementById('search-input').value.trim();
+  document.querySelectorAll('#filter-pills a').forEach(a => {
+    const url = new URL(a.href, location.origin);
+    if (search) url.searchParams.set('search', search);
+    else url.searchParams.delete('search');
+    a.href = url.pathname + '?' + url.searchParams.toString();
+  });
+}
+
+let searchDebounceTimer = null;
+document.getElementById('search-input').addEventListener('input', () => {
+  syncPillLinks();
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => applyFilters(true), 350);
+});
+document.getElementById('sort-select').addEventListener('change', () => applyFilters(true));
+document.getElementById('order-select').addEventListener('change', () => applyFilters(true));
+document.getElementById('filter-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearTimeout(searchDebounceTimer);
+  applyFilters(true);
+});
+// Support browser back/forward through live-searched states.
+window.addEventListener('popstate', () => location.reload());
 </script>
 
 {% endblock %}

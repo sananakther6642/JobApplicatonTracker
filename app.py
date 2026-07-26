@@ -3,6 +3,8 @@ import os
 import re
 import csv
 import io
+import time
+import uuid
 from flask import (Flask, render_template, request, redirect, url_for,
                    send_from_directory, abort, flash, make_response, jsonify)
 from werkzeug.utils import secure_filename
@@ -15,6 +17,117 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "txt"}
+
+# The Generate page lets you attach a CV/cover letter before a job even
+# exists yet (to compute the interest score). Those files are held here under
+# a pending name until the job is actually pushed, at which point they're
+# claimed and renamed into normal documents — see _save_pending_upload_raw() /
+# _rename_pending_upload() / _claim_pending_upload(). If the user never
+# pushes, they're orphaned; sweep anything older than a day on startup so
+# they don't accumulate forever.
+PENDING_PREFIX = "_pending_"
+
+
+def _cleanup_orphaned_pending_uploads(max_age_hours: int = 24):
+    cutoff = time.time() - max_age_hours * 3600
+    try:
+        for name in os.listdir(UPLOAD_DIR):
+            if name.startswith(PENDING_PREFIX):
+                path = os.path.join(UPLOAD_DIR, name)
+                try:
+                    if os.path.getmtime(path) < cutoff:
+                        os.remove(path)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
+_cleanup_orphaned_pending_uploads()
+
+
+def _save_pending_upload_raw(f, doc_type):
+    """Save an uploaded file exactly ONCE, under a generic pending name (we
+    don't know company/role yet at this point). Returns the pending
+    filename, or None if the file is missing/has a disallowed extension.
+
+    IMPORTANT: this is the only place that should ever call f.save() on a
+    given upload. request.files.get(field) returns the same FileStorage
+    object every time it's called within a request, and its underlying
+    stream can only be read once — a second .save() call on the same
+    FileStorage silently writes a 0-byte (corrupted) file instead of
+    raising an error. Once saved here, use _rename_pending_upload() to
+    give it a nicer name — that's a plain filesystem rename, not a re-read
+    of the upload, so it can't corrupt anything."""
+    if not f or not f.filename or "." not in f.filename:
+        return None
+    ext = f.filename.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return None
+    candidate = f"{PENDING_PREFIX}{doc_type}_{uuid.uuid4().hex}.{ext}"
+    f.save(os.path.join(UPLOAD_DIR, candidate))
+    return candidate
+
+
+def _rename_pending_upload(pending_name, company, role, doc_type):
+    """Rename an already-saved pending upload (from _save_pending_upload_raw)
+    to a human-readable name once company/role are known. Best-effort: falls
+    back to the original name unchanged if anything looks wrong, since a
+    naming hiccup should never lose the underlying file."""
+    if not pending_name or not pending_name.startswith(PENDING_PREFIX):
+        return pending_name
+    src = os.path.join(UPLOAD_DIR, pending_name)
+    if not os.path.isfile(src):
+        return pending_name
+    ext = pending_name.rsplit(".", 1)[-1].lower()
+    base = _doc_base_name(company, role, doc_type)
+
+    def _candidate(suffix=""):
+        return f"{PENDING_PREFIX}{base}{suffix}.{ext}"
+
+    candidate = _candidate()
+    path = os.path.join(UPLOAD_DIR, candidate)
+    if os.path.exists(path) and path != src:
+        for v in range(2, 100):
+            candidate = _candidate(f"_v{v}")
+            path = os.path.join(UPLOAD_DIR, candidate)
+            if not os.path.exists(path) or path == src:
+                break
+    if path != src:
+        os.replace(src, path)
+    return candidate
+
+
+def _claim_pending_upload(conn, pending_name, original_name, doc_type, job_id, company, role):
+    """Turn a pending upload (saved by _save_pending_upload) into a real
+    document attached to job_id. Silently no-ops on anything suspicious
+    (missing file, wrong prefix, path traversal) rather than raising, since
+    this is best-effort — a job push should never fail because of this."""
+    if not pending_name or not pending_name.startswith(PENDING_PREFIX):
+        return
+    # Validate defensively since pending_name comes from a client-submitted
+    # hidden form field: reject anything with a path separator (blocks
+    # traversal like "../../etc/passwd") or characters outside a safe
+    # allowlist. NOTE: this intentionally does NOT use werkzeug's
+    # secure_filename() for equality-checking — it strips leading/trailing
+    # "." and "_", which are perfectly safe here and which our own naming
+    # legitimately produces (e.g. a leading "_" when company/role couldn't
+    # be extracted) — using it as an equality check previously caused this
+    # function to silently reject and never claim otherwise-valid files.
+    if pending_name != os.path.basename(pending_name):
+        return
+    if not re.fullmatch(r"[A-Za-z0-9_.\-]+", pending_name):
+        return
+    src = os.path.join(UPLOAD_DIR, pending_name)
+    if not os.path.isfile(src):
+        return
+    ext = pending_name.rsplit(".", 1)[-1].lower()
+    final_name = make_doc_filename(company, role, doc_type, ext, job_id)
+    os.replace(src, os.path.join(UPLOAD_DIR, final_name))
+    conn.execute(
+        "INSERT INTO documents (job_id, filename, original_name, doc_type) VALUES (?,?,?,?)",
+        (job_id, final_name, original_name or final_name, doc_type),
+    )
 
 
 def get_db():
@@ -206,8 +319,20 @@ def slugify(text):
     return text[:40]
 
 
+def _doc_base_name(company, role, doc_type):
+    """Build a filename base from company/role/doc_type, joining only the
+    non-empty parts. Naively joining with "_" regardless of whether
+    company/role are blank (e.g. when JD extraction failed to find a
+    company) produces a leading/doubled underscore like "_resume" instead
+    of "resume" — and werkzeug's secure_filename() strips leading
+    underscores, which previously made _claim_pending_upload() reject the
+    filename outright and silently fail to attach the document."""
+    parts = [p for p in (slugify(company), slugify(role), doc_type) if p]
+    return "_".join(parts) if parts else f"upload_{doc_type}"
+
+
 def make_doc_filename(company, role, doc_type, ext, job_id):
-    base = f"{slugify(company)}_{slugify(role)}_{doc_type}"
+    base = _doc_base_name(company, role, doc_type)
     candidate = f"{base}.{ext}"
     path = os.path.join(UPLOAD_DIR, candidate)
     if not os.path.exists(path):
@@ -674,53 +799,62 @@ EMPTY_JOB_TEMPLATE = {
 
 @app.route("/generate", methods=["GET", "POST"])
 def generate_job():
-    result = None
     error = None
     warnings = []
+    generated = False
+    job = dict(EMPTY_JOB_TEMPLATE)
+    job["applied_date"] = date.today().isoformat()
+    cv_info = None
+    cover_info = None
+
+    cv_pending = cover_pending = None
+
     if request.method == "POST":
         try:
             import gen_job
             from gen_job import generate, pdf_to_text
-            import tempfile
 
             jd_text = request.form.get("jd_text", "").strip()
 
-            # optional PDF uploads — read to temp files
-            def _read_pdf_upload(field, label):
+            # Save each uploaded PDF EXACTLY ONCE (as a generically-named
+            # pending file — we don't know company/role yet), then extract
+            # its text from that saved copy on disk. Re-reading the original
+            # FileStorage a second time (e.g. to also save a "nicely named"
+            # copy) would silently produce a 0-byte/corrupted file, since its
+            # upload stream can only be consumed once — see the warning on
+            # _save_pending_upload_raw().
+            def _upload_and_extract(field, label, doc_type):
                 f = request.files.get(field)
-                if f and f.filename:
-                    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-                    tmp.close()
-                    try:
-                        f.save(tmp.name)
-                        text = pdf_to_text(tmp.name)
-                    finally:
-                        try:
-                            os.unlink(tmp.name)
-                        except OSError:
-                            pass
-                    if not text.strip():
-                        # pdf_to_text() swallows extraction errors (e.g. missing
-                        # pdfminer.six, a scanned/image-only PDF, or a corrupt
-                        # file) and just returns "" — surface that here instead
-                        # of silently ignoring the upload.
-                        warnings.append(
-                            f"Could not extract any text from the {label} PDF "
-                            f"'{f.filename}' — it may be scanned/image-only, "
-                            f"corrupt, or pdfminer.six may not be installed."
-                        )
-                    return text, f.filename
-                return "", ""
+                if not f or not f.filename:
+                    return "", "", None
+                pending_name = _save_pending_upload_raw(f, doc_type)
+                if not pending_name:
+                    warnings.append(
+                        f"'{f.filename}' isn't a supported file type for {label} "
+                        f"(allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))})."
+                    )
+                    return "", f.filename, None
+                text = pdf_to_text(os.path.join(UPLOAD_DIR, pending_name))
+                if not text.strip():
+                    warnings.append(
+                        f"Could not extract any text from the {label} PDF "
+                        f"'{f.filename}' — it may be scanned/image-only, "
+                        f"corrupt, or pdfminer.six may not be installed."
+                    )
+                return text, f.filename, pending_name
 
-            cv_text, cv_name     = _read_pdf_upload("cv_pdf", "CV/Resume")
-            cover_text, _        = _read_pdf_upload("cover_pdf", "Cover Letter")
+            cv_text, cv_name, cv_pending          = _upload_and_extract("cv_pdf", "CV/Resume", "resume")
+            cover_text, cover_name, cover_pending = _upload_and_extract("cover_pdf", "Cover Letter", "cover_letter")
+            if cv_text.strip():
+                cv_info = {"filename": cv_name, "chars": len(cv_text)}
+            if cover_text.strip():
+                cover_info = {"filename": cover_name, "chars": len(cover_text)}
 
             if not jd_text:
                 error = "Job description is required."
             else:
-                import json as _json
-                data = generate(jd_text, cv_text, cover_text, cv_name, "")
-                result = _json.dumps(data, indent=2, ensure_ascii=False)
+                job = generate(jd_text, cv_text, cover_text, cv_name, "")
+                generated = True
                 ai_status = gen_job.LAST_AI_STATUS
                 if ai_status == "ok":
                     warnings.append(
@@ -734,20 +868,25 @@ def generate_job():
                         f"fill them in ({ai_status}). Run 'ollama serve' to enable "
                         "AI-assisted extraction, or fill those fields in manually."
                     )
+
+            # Now that company/role are known (if extraction succeeded), give
+            # the already-saved pending files a human-readable name. This is
+            # a plain filesystem rename — it never re-touches the original
+            # upload stream, so it can't corrupt the file.
+            company = job.get("company", "")
+            role    = job.get("role", "")
+            if cv_pending:
+                cv_pending = _rename_pending_upload(cv_pending, company, role, "resume")
+            if cover_pending:
+                cover_pending = _rename_pending_upload(cover_pending, company, role, "cover_letter")
         except Exception as e:
             error = str(e)
 
-    if not result:
-        import json as _json
-        template = dict(EMPTY_JOB_TEMPLATE)
-        template["applied_date"] = date.today().isoformat()
-        empty_template = _json.dumps(template, indent=2, ensure_ascii=False)
-    else:
-        empty_template = None
-
     return render_template(
-        "generate.html", result=result, empty_template=empty_template,
-        error=error, warnings=warnings,
+        "generate.html", job=job, generated=generated, cv_info=cv_info,
+        cover_info=cover_info, cv_pending=cv_pending, cover_pending=cover_pending,
+        error=error, warnings=warnings, statuses=STATUSES,
+        status_labels=STATUS_LABELS,
     )
 
 
@@ -817,6 +956,13 @@ def api_add_job():
             d.get("recruiter_linkedin", ""),
             company, role,
             phone=d.get("recruiter_phone", ""))
+
+        # Claim any pending uploads from the Generate page (CV/cover letter)
+        # so they become real documents attached to the new job.
+        for pending_name, doc_type in [(d.get("cv_pending", ""), "resume"),
+                                        (d.get("cover_pending", ""), "cover_letter")]:
+            if pending_name:
+                _claim_pending_upload(conn, pending_name, "", doc_type, job_id, company, role)
 
     return {
         "id": job_id,

@@ -61,33 +61,165 @@
     </div>
     {% endif %}
 
-    <div class="card" style="padding:24px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div style="font-weight:700;font-size:14px">{{ 'Generated JSON' if result else 'Job JSON' }}</div>
+    {% if cv_info or cover_info %}
+    <div class="card" style="padding:14px 18px;margin-bottom:16px;border-left:3px solid var(--success,#16a34a)">
+      {% if cv_info %}
+      <div style="font-size:13px;color:var(--text2)">✓ CV/Resume read successfully — <strong>{{ cv_info.filename }}</strong> ({{ cv_info.chars }} characters) — used for the interest score below.</div>
+      {% endif %}
+      {% if cover_info %}
+      <div style="font-size:13px;color:var(--text2);{% if cv_info %}margin-top:4px{% endif %}">✓ Cover letter read successfully — <strong>{{ cover_info.filename }}</strong> ({{ cover_info.chars }} characters) — used for the interest score and as a recruiter-info fallback.</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <form id="gen-result-form">
+    <input type="hidden" name="cv_pending" value="{{ cv_pending or '' }}">
+    <input type="hidden" name="cover_pending" value="{{ cover_pending or '' }}">
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">{{ 'Generated Job' if generated else 'Job Fields' }}</div>
         <div style="display:flex;gap:8px">
-          <button onclick="copyJSON()" class="btn btn-ghost btn-sm" id="copy-btn">📋 Copy</button>
-          <button onclick="pushJob()" class="btn btn-primary btn-sm" id="push-btn">🚀 Push to Tracker</button>
+          <button type="button" onclick="copyJSON()" class="btn btn-ghost btn-sm" id="copy-btn">📋 Copy JSON</button>
+          <button type="button" onclick="pushJob()" class="btn btn-primary btn-sm" id="push-btn">🚀 Push to Tracker</button>
         </div>
       </div>
 
-      <div id="push-result" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
+      <div id="push-result" style="display:none;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
 
-      <textarea id="json-output" rows="26"
-        style="width:100%;font-family:monospace;font-size:12px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;line-height:1.5;box-sizing:border-box"
-        spellcheck="false">{{ result or empty_template }}</textarea>
-
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">
-        {% if result %}Edit fields directly before pushing.{% else %}No JD generated yet — paste one and click Generate, or edit/paste JSON here directly.{% endif %}
-        Required: company + role.
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Company *</label>
+          <input class="form-input" type="text" name="company" value="{{ job.company }}" placeholder="e.g. Google">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Role *</label>
+          <input class="form-input" type="text" name="role" value="{{ job.role }}" placeholder="e.g. Senior SWE">
+        </div>
       </div>
 
-      <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(217,119,6,0.1);border:1px solid rgba(217,119,6,0.35);font-size:12px;color:var(--text2);line-height:1.5">
-        ⚠️ <strong>Heads up:</strong> auto-extracted fields (regex and especially the
-        local AI assist) can occasionally be wrong or hallucinated — e.g. an
-        invented company, phone number, or salary. Always review every field
-        once before pushing to the tracker.
+      <div class="form-row cols3" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Date Applied</label>
+          <input class="form-input" type="date" name="applied_date" value="{{ job.applied_date }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Status</label>
+          <select class="form-input" name="status">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if s==job.status %}selected{% endif %}>{{ status_labels[s] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Source</label>
+          <input class="form-input" type="text" name="source" value="{{ job.source }}" placeholder="LinkedIn, Referral…">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Location</label>
+          <input class="form-input" type="text" name="location" value="{{ job.location }}" placeholder="Remote / San Francisco">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Salary Range</label>
+          <input class="form-input" type="text" name="salary_range" value="{{ job.salary_range }}" placeholder="$120k – $160k">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Job URL</label>
+          <input class="form-input" type="url" name="job_url" value="{{ job.job_url }}" placeholder="https://…">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Resume Version</label>
+          <input class="form-input" type="text" name="resume_version" value="{{ job.resume_version }}" placeholder="e.g. v3, Senior-focused">
+        </div>
+      </div>
+
+      <div class="form-row cols3" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Follow-up Date</label>
+          <input class="form-input" type="date" name="follow_up_date" value="{{ job.follow_up_date }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Offer Deadline</label>
+          <input class="form-input" type="date" name="offer_deadline" value="{{ job.offer_deadline }}">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Interest Score</label>
+          <select class="form-input" name="interest_score">
+            {% for i in range(1,6) %}
+            <option value="{{ i }}" {% if i|string == job.interest_score|string %}selected{% endif %}>{{ i }}/5</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Tags <span style="font-weight:400;text-transform:none;font-size:11px">(comma-separated)</span></label>
+        <input class="form-input" type="text" name="tags" value="{{ job.tags }}" placeholder="remote, fintech, startup">
+      </div>
+
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Next Action</label>
+        <input class="form-input" type="text" name="next_action" value="{{ job.next_action }}" placeholder="e.g. Send follow-up email…">
+      </div>
+
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" name="notes" rows="2" placeholder="Referral name, key requirements, prep notes…">{{ job.notes }}</textarea>
       </div>
     </div>
+
+    <!-- Contact -->
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Contact</div>
+
+      <div class="form-row" style="margin-bottom:18px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Name</label>
+          <input class="form-input" type="text" name="recruiter_name" value="{{ job.recruiter_name }}" placeholder="Jane Smith">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Email</label>
+          <input class="form-input" type="email" name="recruiter_email" value="{{ job.recruiter_email }}" placeholder="jane@company.com">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:0">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter Phone</label>
+          <input class="form-input" type="tel" name="recruiter_phone" value="{{ job.recruiter_phone }}" placeholder="+1 555 123 4567">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Recruiter LinkedIn</label>
+          <input class="form-input" type="url" name="recruiter_linkedin" value="{{ job.recruiter_linkedin }}" placeholder="https://linkedin.com/in/…">
+        </div>
+      </div>
+    </div>
+
+    <!-- Job Description -->
+    <div class="card" style="padding:24px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Description</div>
+      <div class="form-group" style="margin:0">
+        <textarea class="form-input" name="jd" rows="6" placeholder="Paste the full job description here…">{{ job.jd }}</textarea>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">
+      {% if generated %}All fields above are editable — fix anything before pushing.{% else %}No JD generated yet — paste one on the left and click Generate, or just fill these fields in manually.{% endif %}
+      Required: company + role.
+    </div>
+
+    <div style="padding:10px 12px;border-radius:8px;background:rgba(217,119,6,0.1);border:1px solid rgba(217,119,6,0.35);font-size:12px;color:var(--text2);line-height:1.5">
+      ⚠️ <strong>Heads up:</strong> auto-extracted fields (regex and especially the
+      local AI assist) can occasionally be wrong or hallucinated — e.g. an
+      invented company, phone number, or salary. Always review every field
+      once before pushing to the tracker.
+    </div>
+    </form>
   </div>
 
 </div>
@@ -127,26 +259,27 @@ document.getElementById('gen-form').addEventListener('submit', function () {
   overlay.style.display = 'flex';
 });
 
+// Collect the current value of every named field in the form into a plain
+// object — this is the single source of truth for both Copy JSON and Push,
+// so whatever the user sees/edits in the fields is exactly what gets sent.
+function collectJobData() {
+  const form = document.getElementById('gen-result-form');
+  const data = {};
+  new FormData(form).forEach((value, key) => { data[key] = value; });
+  return data;
+}
+
 function copyJSON() {
-  const ta = document.getElementById('json-output');
-  if (!ta) return;
-  navigator.clipboard.writeText(ta.value).then(() => {
+  const data = collectJobData();
+  navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
     const btn = document.getElementById('copy-btn');
     btn.textContent = '✓ Copied';
-    setTimeout(() => btn.textContent = '📋 Copy', 2000);
+    setTimeout(() => btn.textContent = '📋 Copy JSON', 2000);
   }).catch(() => showToast('Could not copy', null, 3000));
 }
 
 function pushJob() {
-  const ta = document.getElementById('json-output');
-  if (!ta) return;
-  let data;
-  try {
-    data = JSON.parse(ta.value);
-  } catch(e) {
-    showResult('error', 'Invalid JSON — fix syntax before pushing');
-    return;
-  }
+  const data = collectJobData();
   const btn = document.getElementById('push-btn');
   btn.textContent = '⏳ Pushing…';
   btn.disabled = true;

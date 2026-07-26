@@ -66,10 +66,11 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 
 ### Find what you need instantly
 
-- **Search** across company, role, JD, notes — with live result highlighting
+- **Live search** across company, role, JD, notes — filters as you type (debounced AJAX, no page reload) with result highlighting
 - **Filter** by status, tag, starred, source, date range
 - **Sort** by date, company, salary, interest score
 - **Tags** — comma-separated, filterable pills on every job
+- **Click any job card** to open its full detail page — no need to hunt for a "View" button
 
 ### Dashboard that actually tells you something
 
@@ -103,7 +104,9 @@ StepStone, German job boards, etc.), and understands both English and German
 labels (`Standort`, `Gehalt`, `Ansprechpartner`, `Telefon`, ...).
 
 Upload your CV/cover letter PDFs alongside → interest score calculated from
-keyword overlap with the JD.
+keyword overlap with the JD, **and** the files themselves are attached to the
+job's Documents as soon as you push — no need to re-upload them on the job
+detail page afterward.
 
 **Optional local AI assist** — if a JD is unusually unstructured (plain prose,
 no clear headings) and the regex extraction can't find a company or role, JAT
