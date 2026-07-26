@@ -90,11 +90,12 @@
 <div style="margin-bottom:12px"><div class="field-label">Job URL</div><div class="field-value">{{ job.job_url }}</div></div>
 {% endif %}
 
-{% if job.recruiter_name or job.recruiter_email or job.recruiter_linkedin %}
+{% if job.recruiter_name or job.recruiter_email or job.recruiter_phone or job.recruiter_linkedin %}
 <h2>Contact</h2>
 <div class="grid3">
   {% if job.recruiter_name %}<div><div class="field-label">Name</div><div class="field-value">{{ job.recruiter_name }}</div></div>{% endif %}
   {% if job.recruiter_email %}<div><div class="field-label">Email</div><div class="field-value">{{ job.recruiter_email }}</div></div>{% endif %}
+  {% if job.recruiter_phone %}<div><div class="field-label">Phone</div><div class="field-value">{{ job.recruiter_phone }}</div></div>{% endif %}
   {% if job.recruiter_linkedin %}<div><div class="field-label">LinkedIn</div><div class="field-value">{{ job.recruiter_linkedin }}</div></div>{% endif %}
 </div>
 {% endif %}

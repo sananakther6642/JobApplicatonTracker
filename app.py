@@ -125,6 +125,7 @@ def init_db():
             ("recruiter_name",     "TEXT DEFAULT ''"),
             ("recruiter_email",    "TEXT DEFAULT ''"),
             ("recruiter_linkedin", "TEXT DEFAULT ''"),
+            ("recruiter_phone",    "TEXT DEFAULT ''"),
             ("follow_up_date",     "TEXT DEFAULT ''"),
             ("offer_deadline",     "TEXT DEFAULT ''"),
             ("starred",            "INTEGER DEFAULT 0"),
@@ -136,6 +137,16 @@ def init_db():
         for col, typedef in new_cols:
             try:
                 conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass  # Column already exists
+
+        # Add new columns to existing contacts table
+        contact_new_cols = [
+            ("phone", "TEXT DEFAULT ''"),
+        ]
+        for col, typedef in contact_new_cols:
+            try:
+                conn.execute(f"ALTER TABLE contacts ADD COLUMN {col} {typedef}")
             except Exception:
                 pass  # Column already exists
 
@@ -219,7 +230,7 @@ def save_tags(conn, job_id, tags_str):
                 conn.execute("INSERT INTO tags (job_id, name) VALUES (?,?)", (job_id, tag))
 
 
-def sync_recruiter_contact(conn, name, email, linkedin, company, role):
+def sync_recruiter_contact(conn, name, email, linkedin, company, role, phone=""):
     """Auto-add or update contact from recruiter fields. No-op if name is blank."""
     name = (name or "").strip()
     if not name:
@@ -227,27 +238,29 @@ def sync_recruiter_contact(conn, name, email, linkedin, company, role):
     email    = (email    or "").strip()
     linkedin = (linkedin or "").strip()
     company  = (company  or "").strip()
+    phone    = (phone    or "").strip()
     title    = ("Recruiter" + (f" — {role}" if role else "")).strip(" —")
 
     existing = conn.execute(
-        "SELECT id, email, linkedin FROM contacts WHERE LOWER(name)=LOWER(?)",
+        "SELECT id, email, linkedin, company, phone FROM contacts WHERE LOWER(name)=LOWER(?)",
         (name,)
     ).fetchone()
 
     if existing:
-        # update only fields that were blank before or are being enriched
+        # keep the previous value for any field that isn't being enriched with new data
         new_email    = email    or existing["email"]
         new_linkedin = linkedin or existing["linkedin"]
+        new_company  = company  or existing["company"]
+        new_phone    = phone    or existing["phone"]
         conn.execute(
-            "UPDATE contacts SET email=?, linkedin=?, company=? WHERE id=?",
-            (new_email, new_linkedin, company or existing["company"] if company else existing["company"],
-             existing["id"]),
+            "UPDATE contacts SET email=?, linkedin=?, company=?, phone=?, title=? WHERE id=?",
+            (new_email, new_linkedin, new_company, new_phone, title, existing["id"]),
         )
     else:
         conn.execute(
-            """INSERT INTO contacts (name, email, linkedin, company, title)
-               VALUES (?,?,?,?,?)""",
-            (name, email, linkedin, company, title),
+            """INSERT INTO contacts (name, email, linkedin, company, phone, title)
+               VALUES (?,?,?,?,?,?)""",
+            (name, email, linkedin, company, phone, title),
         )
 
 
@@ -592,10 +605,10 @@ def add_job():
                 """INSERT INTO jobs
                    (company, role, jd, job_url, applied_date, status, source,
                     salary_range, location, notes,
-                    recruiter_name, recruiter_email, recruiter_linkedin,
+                    recruiter_name, recruiter_email, recruiter_phone, recruiter_linkedin,
                     follow_up_date, offer_deadline, resume_version,
                     interest_score, next_action)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     company,
                     role,
@@ -609,6 +622,7 @@ def add_job():
                     request.form.get("notes", ""),
                     request.form.get("recruiter_name", ""),
                     request.form.get("recruiter_email", ""),
+                    request.form.get("recruiter_phone", ""),
                     request.form.get("recruiter_linkedin", ""),
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
@@ -629,7 +643,8 @@ def add_job():
                 request.form.get("recruiter_name", ""),
                 request.form.get("recruiter_email", ""),
                 request.form.get("recruiter_linkedin", ""),
-                company, role)
+                company, role,
+                phone=request.form.get("recruiter_phone", ""))
 
         files = request.files.getlist("documents")
         doc_types = request.form.getlist("doc_types")
@@ -651,6 +666,7 @@ def add_job():
 def generate_job():
     result = None
     error = None
+    warnings = []
     if request.method == "POST":
         try:
             from gen_job import generate, pdf_to_text
@@ -659,7 +675,7 @@ def generate_job():
             jd_text = request.form.get("jd_text", "").strip()
 
             # optional PDF uploads — read to temp files
-            def _read_pdf_upload(field):
+            def _read_pdf_upload(field, label):
                 f = request.files.get(field)
                 if f and f.filename:
                     tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -672,11 +688,21 @@ def generate_job():
                             os.unlink(tmp.name)
                         except OSError:
                             pass
+                    if not text.strip():
+                        # pdf_to_text() swallows extraction errors (e.g. missing
+                        # pdfminer.six, a scanned/image-only PDF, or a corrupt
+                        # file) and just returns "" — surface that here instead
+                        # of silently ignoring the upload.
+                        warnings.append(
+                            f"Could not extract any text from the {label} PDF "
+                            f"'{f.filename}' — it may be scanned/image-only, "
+                            f"corrupt, or pdfminer.six may not be installed."
+                        )
                     return text, f.filename
                 return "", ""
 
-            cv_text, cv_name     = _read_pdf_upload("cv_pdf")
-            cover_text, _        = _read_pdf_upload("cover_pdf")
+            cv_text, cv_name     = _read_pdf_upload("cv_pdf", "CV/Resume")
+            cover_text, _        = _read_pdf_upload("cover_pdf", "Cover Letter")
 
             if not jd_text:
                 error = "Job description is required."
@@ -687,7 +713,7 @@ def generate_job():
         except Exception as e:
             error = str(e)
 
-    return render_template("generate.html", result=result, error=error)
+    return render_template("generate.html", result=result, error=error, warnings=warnings)
 
 
 @app.route("/api/job", methods=["POST"])
@@ -719,10 +745,10 @@ def api_add_job():
             """INSERT INTO jobs
                (company, role, jd, job_url, applied_date, status, source,
                 salary_range, location, notes,
-                recruiter_name, recruiter_email, recruiter_linkedin,
+                recruiter_name, recruiter_email, recruiter_phone, recruiter_linkedin,
                 follow_up_date, offer_deadline, resume_version,
                 interest_score, next_action)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 company, role,
                 d.get("jd", ""),
@@ -735,6 +761,7 @@ def api_add_job():
                 d.get("notes", ""),
                 d.get("recruiter_name", ""),
                 d.get("recruiter_email", ""),
+                d.get("recruiter_phone", ""),
                 d.get("recruiter_linkedin", ""),
                 d.get("follow_up_date", ""),
                 d.get("offer_deadline", ""),
@@ -753,7 +780,8 @@ def api_add_job():
             d.get("recruiter_name", ""),
             d.get("recruiter_email", ""),
             d.get("recruiter_linkedin", ""),
-            company, role)
+            company, role,
+            phone=d.get("recruiter_phone", ""))
 
     return {
         "id": job_id,
@@ -800,7 +828,7 @@ def edit_job(job_id):
                 """UPDATE jobs SET
                    company=?, role=?, jd=?, job_url=?, applied_date=?,
                    status=?, source=?, salary_range=?, location=?, notes=?,
-                   recruiter_name=?, recruiter_email=?, recruiter_linkedin=?,
+                   recruiter_name=?, recruiter_email=?, recruiter_phone=?, recruiter_linkedin=?,
                    follow_up_date=?, offer_deadline=?, resume_version=?,
                    interest_score=?, next_action=?, rejection_reason=?,
                    updated_at=datetime('now')
@@ -818,6 +846,7 @@ def edit_job(job_id):
                     request.form.get("notes", ""),
                     request.form.get("recruiter_name", ""),
                     request.form.get("recruiter_email", ""),
+                    request.form.get("recruiter_phone", ""),
                     request.form.get("recruiter_linkedin", ""),
                     request.form.get("follow_up_date", ""),
                     request.form.get("offer_deadline", ""),
@@ -843,7 +872,8 @@ def edit_job(job_id):
                 request.form.get("recruiter_name", ""),
                 request.form.get("recruiter_email", ""),
                 request.form.get("recruiter_linkedin", ""),
-                request.form.get("company", ""), request.form.get("role", ""))
+                request.form.get("company", ""), request.form.get("role", ""),
+                phone=request.form.get("recruiter_phone", ""))
             return redirect(url_for("job_detail", job_id=job_id))
 
     return render_template(
@@ -1053,12 +1083,12 @@ def clone_job(job_id):
         cur = conn.execute(
             """INSERT INTO jobs (company, role, jd, job_url, applied_date, status, source,
                               salary_range, location, notes, recruiter_name, recruiter_email,
-                              recruiter_linkedin, resume_version, interest_score, next_action)
-                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                              recruiter_phone, recruiter_linkedin, resume_version, interest_score, next_action)
+                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (job["company"], job["role"], job["jd"], job["job_url"],
              date.today().isoformat(), "applied", job["source"],
              job["salary_range"], job["location"], job["notes"],
-             job["recruiter_name"], job["recruiter_email"], job["recruiter_linkedin"],
+             job["recruiter_name"], job["recruiter_email"], job["recruiter_phone"], job["recruiter_linkedin"],
              job["resume_version"], job["interest_score"], job["next_action"])
         )
         new_id = cur.lastrowid
@@ -1341,7 +1371,7 @@ def export_csv():
     with get_db() as conn:
         jobs = conn.execute("""
             SELECT id, company, role, status, applied_date, location, salary_range, source,
-                   job_url, notes, recruiter_name, recruiter_email, recruiter_linkedin,
+                   job_url, notes, recruiter_name, recruiter_email, recruiter_phone, recruiter_linkedin,
                    follow_up_date, offer_deadline, resume_version, starred,
                    interest_score, next_action, rejection_reason,
                    created_at, updated_at
@@ -1352,7 +1382,7 @@ def export_csv():
     writer = csv.writer(output)
     writer.writerow([
         "ID", "Company", "Role", "Status", "Applied Date", "Location", "Salary Range",
-        "Source", "Job URL", "Notes", "Recruiter Name", "Recruiter Email",
+        "Source", "Job URL", "Notes", "Recruiter Name", "Recruiter Email", "Recruiter Phone",
         "Recruiter LinkedIn", "Follow Up Date", "Offer Deadline", "Resume Version",
         "Starred", "Interest Score", "Next Action", "Rejection Reason",
         "Created At", "Updated At",
@@ -1364,7 +1394,7 @@ def export_csv():
             job["applied_date"] or "",
             job["location"] or "", job["salary_range"] or "", job["source"] or "",
             job["job_url"] or "", job["notes"] or "",
-            job["recruiter_name"] or "", job["recruiter_email"] or "",
+            job["recruiter_name"] or "", job["recruiter_email"] or "", job["recruiter_phone"] or "",
             job["recruiter_linkedin"] or "",
             job["follow_up_date"] or "", job["offer_deadline"] or "",
             job["resume_version"] or "",
@@ -1427,10 +1457,10 @@ def import_csv():
                             """INSERT INTO jobs
                                (company, role, status, applied_date, location, salary_range,
                                 source, job_url, notes, recruiter_name, recruiter_email,
-                                recruiter_linkedin, follow_up_date, offer_deadline,
+                                recruiter_phone, recruiter_linkedin, follow_up_date, offer_deadline,
                                 resume_version, interest_score, next_action, rejection_reason,
                                 starred)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
                                 company, role, status,
                                 (row.get("Applied Date") or row.get("applied_date") or "").strip() or date.today().isoformat(),
@@ -1441,6 +1471,7 @@ def import_csv():
                                 (row.get("Notes") or row.get("notes") or "").strip(),
                                 (row.get("Recruiter Name") or row.get("recruiter_name") or "").strip(),
                                 (row.get("Recruiter Email") or row.get("recruiter_email") or "").strip(),
+                                (row.get("Recruiter Phone") or row.get("recruiter_phone") or "").strip(),
                                 (row.get("Recruiter LinkedIn") or row.get("recruiter_linkedin") or "").strip(),
                                 (row.get("Follow Up Date") or row.get("follow_up_date") or "").strip(),
                                 (row.get("Offer Deadline") or row.get("offer_deadline") or "").strip(),
@@ -1872,11 +1903,12 @@ def add_contact():
         return redirect(url_for("contacts"))
     with get_db() as conn:
         conn.execute(
-            """INSERT INTO contacts (name, email, linkedin, company, title, notes)
-               VALUES (?,?,?,?,?,?)""",
+            """INSERT INTO contacts (name, email, phone, linkedin, company, title, notes)
+               VALUES (?,?,?,?,?,?,?)""",
             (
                 name,
                 request.form.get("email", "").strip(),
+                request.form.get("phone", "").strip(),
                 request.form.get("linkedin", "").strip(),
                 request.form.get("company", "").strip(),
                 request.form.get("title", "").strip(),
@@ -1906,11 +1938,12 @@ def edit_contact(contact_id):
                 flash("Name is required.", "error")
                 return redirect(url_for("edit_contact", contact_id=contact_id))
             conn.execute(
-                """UPDATE contacts SET name=?, email=?, linkedin=?, company=?, title=?, notes=?
+                """UPDATE contacts SET name=?, email=?, phone=?, linkedin=?, company=?, title=?, notes=?
                    WHERE id=?""",
                 (
                     name,
                     request.form.get("email", "").strip(),
+                    request.form.get("phone", "").strip(),
                     request.form.get("linkedin", "").strip(),
                     request.form.get("company", "").strip(),
                     request.form.get("title", "").strip(),

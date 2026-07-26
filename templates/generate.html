@@ -52,6 +52,15 @@
     </div>
     {% endif %}
 
+    {% if warnings %}
+    <div class="card" style="padding:20px;border-left:3px solid #d97706;margin-bottom:16px">
+      <div style="font-weight:600;color:#d97706;margin-bottom:6px">Warning</div>
+      {% for w in warnings %}
+      <div style="font-size:13px;color:var(--text2)">{{ w }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {% if result %}
     <div class="card" style="padding:24px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
