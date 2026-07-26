@@ -663,9 +663,15 @@ def generate_job():
                 f = request.files.get(field)
                 if f and f.filename:
                     tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-                    f.save(tmp.name)
-                    text = pdf_to_text(tmp.name)
-                    os.unlink(tmp.name)
+                    tmp.close()
+                    try:
+                        f.save(tmp.name)
+                        text = pdf_to_text(tmp.name)
+                    finally:
+                        try:
+                            os.unlink(tmp.name)
+                        except OSError:
+                            pass
                     return text, f.filename
                 return "", ""
 
@@ -698,6 +704,9 @@ def api_add_job():
     interest_raw = str(d.get("interest_score", ""))
     interest = int(interest_raw) if interest_raw.isdigit() and 1 <= int(interest_raw) <= 5 else 0
     applied = d.get("applied_date") or date.today().isoformat()
+    status = d.get("status", "applied")
+    if status not in STATUSES:
+        status = "applied"
 
     with get_db() as conn:
         existing = conn.execute(
@@ -719,7 +728,7 @@ def api_add_job():
                 d.get("jd", ""),
                 d.get("job_url", ""),
                 applied,
-                d.get("status", "applied"),
+                status,
                 d.get("source", ""),
                 d.get("salary_range", ""),
                 d.get("location", ""),
@@ -758,7 +767,9 @@ def _save_uploads(files, doc_types, job_id, company, role):
         for i, f in enumerate(files):
             if not f or not f.filename:
                 continue
-            ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else "pdf"
+            if "." not in f.filename:
+                continue
+            ext = f.filename.rsplit(".", 1)[-1].lower()
             if ext not in ALLOWED_EXTENSIONS:
                 continue
             dtype = doc_types[i] if i < len(doc_types) else "resume"
@@ -937,6 +948,8 @@ def delete_doc(doc_id):
 @app.route("/job/<int:job_id>/add_event", methods=["POST"])
 def add_event(job_id):
     with get_db() as conn:
+        if not conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone():
+            abort(404)
         conn.execute(
             "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
             (
@@ -958,10 +971,19 @@ def api_add_timeline():
     notes   = (d.get("notes") or "").strip()
     if not job_ids or not event:
         return {"error": "job_ids and event required"}, 400
+    # coerce each id to int, skip non-integers (bug 3)
+    safe_ids = []
+    for jid in job_ids:
+        try:
+            safe_ids.append(int(jid))
+        except (TypeError, ValueError):
+            pass
+    if not safe_ids:
+        return {"error": "no valid job_ids"}, 400
     today = date.today().isoformat()
     inserted = []
     with get_db() as conn:
-        for jid in job_ids:
+        for jid in safe_ids:
             row = conn.execute("SELECT id FROM jobs WHERE id=?", (jid,)).fetchone()
             if row:
                 conn.execute(
@@ -1001,7 +1023,9 @@ def quick_status(job_id):
         abort(400)
     with get_db() as conn:
         old = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
-        if old and old["status"] != new_status:
+        if not old:
+            return jsonify({"ok": False, "error": "Job not found"}), 404
+        if old["status"] != new_status:
             conn.execute(
                 "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                 (new_status, job_id)
@@ -1398,8 +1422,9 @@ def import_csv():
                                (company, role, status, applied_date, location, salary_range,
                                 source, job_url, notes, recruiter_name, recruiter_email,
                                 recruiter_linkedin, follow_up_date, offer_deadline,
-                                resume_version, interest_score, next_action, rejection_reason)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                resume_version, interest_score, next_action, rejection_reason,
+                                starred)
+                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
                                 company, role, status,
                                 (row.get("Applied Date") or row.get("applied_date") or "").strip() or date.today().isoformat(),
@@ -1417,6 +1442,7 @@ def import_csv():
                                 interest,
                                 (row.get("Next Action") or row.get("next_action") or "").strip(),
                                 (row.get("Rejection Reason") or row.get("rejection_reason") or "").strip(),
+                                1 if (row.get("Starred") or row.get("starred") or "").strip().lower() == "yes" else 0,
                             )
                         )
                         imported += 1
