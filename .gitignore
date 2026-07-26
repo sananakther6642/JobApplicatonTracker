@@ -1,11 +1,58 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-jobs.db
-uploads/
-.DS_Store
+*.pyd
 *.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
 venv/
+.venv/
+env/
+.env/
+
+# Environment variables
 .env
+.env.*
+!.env.example
+
+# Database & uploads (personal data — never commit)
+jobs.db
+jobs.db.bak
+*.db
+uploads/
+
+# Personal documents
 *.pdf
 *.tex
+*.doc
+*.docx
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code review graph
+.code-review-graph/
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+desktop.ini
