@@ -28,17 +28,18 @@ JAT is a local-first job application tracker. Run it on your machine, open it in
 ## Quick Start
 
 ```bash
-# 1. Install the only dependency
-pip3 install flask
+# 1. Clone
+git clone https://github.com/sananakther6642/JobApplicatonTracker.git
+cd JobApplicatonTracker
 
-# 2. Run
+# 2. Run — installs Flask automatically, starts server
 ./start.sh
 
 # 3. Open
 open http://localhost:5050
 ```
 
-That's it.
+That's it. Flask installs automatically on first run.
 
 ---
 
@@ -109,24 +110,6 @@ Click any `[PLACEHOLDER]` → dropdown shows real data from your saved jobs:
 
 Copy body → **automatically logs to job timeline.** No manual note needed.
 
-### JSON API — log jobs without opening the browser
-
-```bash
-# Fill the template
-cp job_template.json ford.json
-vim ford.json
-
-# Push
-./push_job.sh ford.json
-# → {"id": 12, "url": "http://localhost:5050/job/12", "duplicate_warning": false}
-```
-
-Or generate + push in one step:
-
-```bash
-python3 gen_job.py --jd-file jd.txt --cv CV.pdf --push
-```
-
 ---
 
 ## Keyboard Shortcuts
@@ -171,10 +154,8 @@ Files are renamed automatically on upload:
 jat/
 ├── app.py              # Flask backend — all routes, DB schema, helpers
 ├── gen_job.py          # Offline JD parser — extracts fields from text/PDF
-├── start.sh            # ./start.sh — kills port 5050, starts server
-├── push_job.sh         # ./push_job.sh job.json — push via API
-├── job_template.json   # Blank template to fill per application
-├── api.txt             # Full API reference + curl examples
+├── start.sh            # ./start.sh — auto-installs deps, starts server
+├── requirements.txt    # pip dependencies (flask)
 ├── pytest.ini          # Test configuration
 ├── LICENSE
 │
