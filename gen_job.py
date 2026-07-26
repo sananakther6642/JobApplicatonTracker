@@ -71,12 +71,19 @@ def extract_role(text: str) -> str:
     if m:
         return m.group(1).strip()
 
-    # Fallback: job postings almost always lead with the title as the very first line
+    # Fallback: structured postings almost always lead with the title as the very
+    # first line. Skip it if that line reads like prose (a sentence opener) rather
+    # than a heading, since unstructured JDs often start with "We're a ..." /
+    # "Our team is looking for ..." instead of the job title.
+    _SENTENCE_OPENERS = re.compile(
+        r"(?i:^(?:we'?re|we\s+are|our\s|this\s|as\s+an?\b|the\s|you\s+will\b|join\s+))"
+    )
     for line in text.strip().splitlines():
         line = line.strip()
         if not line:
             continue
-        if 4 <= len(line) <= 100 and not line.endswith((".", ":")):
+        if (4 <= len(line) <= 100 and not line.endswith((".", ":"))
+                and not _SENTENCE_OPENERS.match(line)):
             return line
         break
     return ""
@@ -84,6 +91,14 @@ def extract_role(text: str) -> str:
 
 _COUNTRIES = (r"(?:Germany|USA|United States|UK|United Kingdom|France|Netherlands|"
               r"Switzerland|Austria|India|Canada|Spain|Italy|Poland|Sweden|Ireland)")
+
+# Real US state/territory abbreviations only — NOT a generic [A-Z]{2,3}, which would
+# also match unrelated tech acronyms like "CI" (from "CI/CD") or "QA" and misread
+# something like "Docker, CI/CD" as a "City, State" location.
+_US_STATES = (
+    r"(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|"
+    r"MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)"
+)
 
 
 def extract_location(text: str) -> str:
@@ -99,7 +114,7 @@ def extract_location(text: str) -> str:
         # "City, ST" (e.g. "Sunrise, FL") or "City, Country" (e.g. "Stuttgart, Germany")
         # — tried before the "(hybrid)" pattern below so the full city+region is kept
         # rather than only whichever half happens to sit next to the parenthesis.
-        m = re.search(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*(?:[A-Z]{2,3}\b|" + _COUNTRIES + r"))", text)
+        m = re.search(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*(?:" + _US_STATES + r"\b|" + _COUNTRIES + r"))", text)
         if m:
             loc = m.group(1).strip()
     if not loc:
