@@ -111,10 +111,10 @@
     </div>
 
     <!-- Contact card -->
-    {% if job.recruiter_name or job.recruiter_email or job.recruiter_linkedin %}
+    {% if job.recruiter_name or job.recruiter_email or job.recruiter_phone or job.recruiter_linkedin %}
     <div class="card" style="padding:20px 24px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:14px">Contact</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px">
         {% if job.recruiter_name %}
         <div>
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Name</div>
@@ -125,6 +125,12 @@
         <div>
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Email</div>
           <div style="font-size:14px"><a href="mailto:{{ job.recruiter_email }}">{{ job.recruiter_email }}</a></div>
+        </div>
+        {% endif %}
+        {% if job.recruiter_phone %}
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text3);margin-bottom:3px">Phone</div>
+          <div style="font-size:14px"><a href="tel:{{ job.recruiter_phone }}">{{ job.recruiter_phone }}</a></div>
         </div>
         {% endif %}
         {% if job.recruiter_linkedin %}

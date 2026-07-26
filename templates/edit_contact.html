@@ -29,6 +29,10 @@
         <input class="form-input" type="email" name="email" value="{{ contact.email or '' }}">
       </div>
       <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input class="form-input" type="tel" name="phone" value="{{ contact.phone or '' }}" placeholder="+1 555 123 4567">
+      </div>
+      <div class="form-group">
         <label class="form-label">LinkedIn</label>
         <input class="form-input" type="url" name="linkedin" value="{{ contact.linkedin or '' }}">
       </div>

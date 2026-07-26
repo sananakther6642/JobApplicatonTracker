@@ -34,6 +34,9 @@
             {% if c.email %}
             <a href="mailto:{{ c.email }}" style="font-size:11px;color:var(--accent)">{{ c.email }}</a>
             {% endif %}
+            {% if c.phone %}
+            <a href="tel:{{ c.phone }}" style="font-size:11px;color:var(--accent)">{{ c.phone }}</a>
+            {% endif %}
             {% if c.linkedin %}
             <a href="{{ c.linkedin }}" target="_blank" style="font-size:11px;color:var(--accent)">LinkedIn</a>
             {% endif %}
@@ -79,6 +82,10 @@
       <div class="form-group">
         <label class="form-label">Email</label>
         <input class="form-input" type="email" name="email" placeholder="jane@company.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input class="form-input" type="tel" name="phone" placeholder="+1 555 123 4567">
       </div>
       <div class="form-group">
         <label class="form-label">LinkedIn</label>
