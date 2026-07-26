@@ -112,7 +112,8 @@ to fill in *only* the missing fields. This is:
 
 - **Free and fully offline** — no API key, no cloud calls, runs entirely on your machine
 - **A gap-filler, never a primary source** — the fast regex result is always trusted first; the AI is only consulted when it's genuinely needed, so well-formed JDs never pay any AI latency
-- **Guarded against hallucination** — AI-provided numbers, phone numbers, and emails are checked against the original JD text and discarded if they don't actually appear there; a warning banner tells you when AI-filled fields are present so you know to double-check them before pushing
+- **Designed so it can't fabricate content** — the model is never asked to *write* a field's value (a small model asked to do that will confidently invent one, e.g. a phone number that isn't in the JD at all — this was tested extensively). Instead it's only asked to point at *which existing line* of the JD contains each field, and the actual value is always the literal text of that line, extracted by code — not generated. On top of that, each field is sanity-checked against what it should look like (a salary line must contain a currency/number, a phone must be mostly digits, an email must look like an email, a name can't be a company) before being used.
+- **A warning banner** tells you whenever AI-filled fields are present, and the JSON panel always carries a reminder to review before pushing (see disclaimer below) — the worst realistic failure mode left is the AI pointing at the wrong *real* line, never inventing one that doesn't exist.
 - **Auto-installed** — `./start.sh` installs Ollama (via Homebrew) and pulls the model automatically on first run if they're not already present; nothing to set up by hand
 
 The JSON panel is always editable — you don't have to generate from a JD at

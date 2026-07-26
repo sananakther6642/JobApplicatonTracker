@@ -46,14 +46,51 @@ AI_MODEL = "qwen2.5:0.5b"
 _OLLAMA_URL = "http://localhost:11434"
 _AI_FIELDS = ("company", "role", "location", "salary_range",
               "recruiter_name", "recruiter_email", "recruiter_phone")
+
+# The model is deliberately NOT asked to write field values itself — a small
+# model asked to "generate" a company/role/salary will confidently invent one
+# when it's unsure (confirmed repeatedly in testing: fabricated phone numbers,
+# a salary range for a JD with no numbers at all, "not provided" taken
+# literally as a value, etc). Instead it only CLASSIFIES which line number
+# (of the JD split into numbered lines) contains each field — a much easier
+# and more reliable task for a small model — and the actual value is then
+# always the literal, unmodified text of that line, copied by our own code.
+# This makes true fabrication structurally impossible: the worst failure mode
+# left is picking the wrong existing line, not inventing content that isn't
+# in the JD at all — see the per-field shape checks in ai_extract_fields().
 _AI_SYSTEM_PROMPT = (
-    "You extract structured fields from a job posting (it may be in English, German, or a mix). "
-    "Read the job description and output ONLY one JSON object with exactly these keys: "
-    "company, role, location, salary_range, recruiter_name, recruiter_email, recruiter_phone. "
-    "Every value MUST be a single plain string, never a list/array/number — e.g. "
-    'salary_range must look like "65000-80000 EUR", not [65000, 80000]. '
-    'Use "" for any field that is not present in the text. Never invent information, and never '
-    "reuse the same value for two different fields (e.g. a city is a location, not a company name)."
+    "You are given a job posting split into numbered lines (it may be in English, German, "
+    "or a mix). For each of these fields — company, role, location, salary_range, "
+    "recruiter_name, recruiter_email, recruiter_phone — reply with ONLY the line number "
+    "that contains that information, or null if no line contains it. "
+    "NEVER write the value yourself, ONLY point to a line number. "
+    "Only pick a line if it is CLEARLY and DIRECTLY that field (e.g. the line IS a job "
+    "title, IS a company name, IS a phone number). If the field is only mentioned in "
+    "passing inside a longer sentence about something else, or you are not confident, "
+    "use null instead of guessing. "
+    'Output ONLY one JSON object, e.g. {"company": 4, "role": 1, "location": null, '
+    '"salary_range": 3, "recruiter_name": null, "recruiter_email": null, "recruiter_phone": null}.'
+)
+
+# Second pass: a much simpler yes/no check per field than the original
+# multi-field line selection — asking "is this line REALLY the company name?"
+# in isolation is an easier judgment for a small model than "which of these
+# 80 lines is the company", so it catches misplacements the first pass missed
+# (e.g. picking a sentence that merely mentions the company in passing).
+_AI_VERIFY_PROMPT = (
+    "You will be shown field:line pairs from a job posting. For each pair, answer "
+    "true ONLY if that exact line clearly and directly IS that field's value (e.g. it "
+    "IS a job title, IS a company name, IS a phone number). Answer false if the line "
+    "merely mentions the topic in passing, is a sentence about something else, or "
+    "doesn't cleanly represent that field on its own. "
+    'Output ONLY one JSON object, e.g. {"company": true, "role": false, ...}.'
+)
+
+_LABEL_STRIP_RE = re.compile(
+    r"(?i:^(?:company|employer|firma|unternehmen|arbeitgeber|position|role|job\s*title|"
+    r"title|stelle|jobbezeichnung|stellenbezeichnung|location|standort|salary|gehalt|"
+    r"vergütung|compensation|contact(?:\s*person)?|ansprechpartner(?:in)?|phone|telephone|"
+    r"tel|mobile|telefon|handy|rufnummer|email|e-mail)\s*:\s*)(.+)$"
 )
 
 _ollama_ready = False  # cached per-process once a model has been confirmed available
@@ -141,53 +178,116 @@ def ensure_ai_ready(model: str = AI_MODEL) -> bool:
     return True
 
 
-_AI_NULL_PHRASES = {
-    "not provided", "not specified", "not mentioned", "not given",
-    "not available", "n/a", "na", "none", "unknown", "not found",
-    "not applicable", "not listed", "not stated",
-}
+def _numbered_lines(text: str, max_lines: int = 80) -> list:
+    """Split JD text into non-empty lines for the model to point at. Capped
+    so the prompt stays small/fast — company/role/location/salary/recruiter
+    info is essentially always within a JD's first ~80 lines."""
+    return [ln.strip() for ln in text.splitlines() if ln.strip()][:max_lines]
 
 
-def _normalize_ai_value(v) -> str:
-    """The model is instructed to always return plain strings, but a small
-    model occasionally returns a list instead (e.g. salary_range as [65000,
-    80000] instead of "65000-80000"). Normalize whatever comes back into a
-    single clean string, and treat placeholder non-answers like "not
-    provided"/"not specified" as blank instead of taking them literally."""
-    if v is None:
-        return ""
-    if isinstance(v, (list, tuple)):
-        parts = [str(x).strip() for x in v if str(x).strip()]
-        s = f"{parts[0]} - {parts[1]}" if len(parts) == 2 else ", ".join(parts)
-    else:
-        s = str(v).strip()
-    if s.strip().lower().rstrip(".") in _AI_NULL_PHRASES:
-        return ""
-    return s
+def _strip_known_label(line: str) -> str:
+    """If a line is literally 'Label: Value' (e.g. 'Telefon: 0911 123'),
+    return just the Value. Otherwise return the line unchanged. Either way
+    the result is always literal JD text — this only trims an obvious label
+    prefix, it never rewrites or invents anything."""
+    m = _LABEL_STRIP_RE.match(line)
+    return m.group(1).strip() if m else line
 
 
-def _plausible_numbers(value: str, text: str, min_len: int = 3) -> bool:
-    """A genuine figure (salary, phone, etc.) is always copied from the JD —
-    reject a value whose numbers don't appear anywhere in the source text
-    (ignoring formatting like commas/periods/spaces), which is a strong sign
-    the model fabricated it rather than read it."""
-    significant = [d for d in re.findall(r"\d+", value) if len(d) >= min_len]
-    if not significant:
-        return True  # nothing numeric to verify (e.g. "competitive"); let it through
-    text_digits = re.sub(r"\D", "", text)
-    return any(d in text_digits for d in significant)
+def _line_number(raw) -> int:
+    """Tolerate the model returning a line number as an int, a float, or a
+    numeric string; anything else (null, a written-out value, garbage) is
+    treated as "no line selected"."""
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    if isinstance(raw, str) and raw.strip().lstrip("-").isdigit():
+        return int(raw.strip())
+    return 0
+
+
+# Per-field shape sanity checks. Because values now always come from a real
+# line the model pointed to, the only realistic failure mode left is picking
+# the WRONG line (e.g. a job reference number mistaken for a phone number) —
+# these checks catch a selected line that clearly doesn't look like the kind
+# of value the field expects, rather than checking for outright invention.
+_MONEY_RE = re.compile(r"(?i:[€$£]|EUR|USD|GBP|\bk\b|\d{2,3}[.,]\d{3})")
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$")
+_COMPANY_SUFFIX_RE = re.compile(r"(?i:\bGmbH\b|\bAG\b|\bInc\.?\b|\bLLC\b|\bLtd\.?\b|\bCorp\.?\b|\bSE\b|\bPLC\b)")
+
+
+def _looks_like_salary(v: str) -> bool:
+    return bool(v) and bool(re.search(r"\d", v)) and bool(_MONEY_RE.search(v))
+
+
+def _looks_like_phone(v: str) -> bool:
+    digits = re.sub(r"\D", "", v)
+    return 6 <= len(digits) <= 16
+
+
+def _looks_like_email(v: str) -> bool:
+    return bool(_EMAIL_RE.match(v.strip()))
+
+
+def _looks_like_person_name(v: str) -> bool:
+    if not v or "@" in v or _COMPANY_SUFFIX_RE.search(v):
+        return False
+    words = v.split()
+    return 1 <= len(words) <= 4 and len(v) <= 40
+
+
+# A real company/role/location heading is a short label, never a narrative
+# sentence — reject a picked line that reads like prose instead (contains an
+# email, uses first/second-person pronouns, or is a long sentence ending in
+# terminal punctuation) rather than accept whatever real-but-wrong line the
+# model pointed at just because it happens to be genuine JD text.
+_PROSE_PRONOUNS_RE = re.compile(r"(?i:\b(?:we|we're|we'll|you|you'll|you're|our|us|i'm)\b)")
+
+# A heading never uses a verb describing what the company/org IS DOING
+# (hiring, seeking, looking for, expanding, founded, based, etc.) — that's
+# always a descriptive sentence ABOUT the company, not the field itself. This
+# specifically catches lines like "Acme Robotics GmbH is hiring in Berlin,
+# Germany." being mistaken for a role/title — confirmed in testing that the
+# model can confidently misjudge this even when asked to double-check itself,
+# so it's enforced deterministically here instead of relying on the model.
+_DESCRIPTIVE_SENTENCE_RE = re.compile(
+    r"(?i:\bis\s+hiring\b|\bare\s+hiring\b|\bis\s+looking\s+for\b|\bis\s+seeking\b|"
+    r"\bare\s+seeking\b|\bhas\s+been\b|\bhave\s+been\b|\bis\s+a\s+|\bis\s+an\s+|"
+    r"\bwas\s+founded\b|\bis\s+expanding\b)"
+)
+
+
+def _looks_like_a_heading(v: str) -> bool:
+    if not v:
+        return True  # nothing to check — an empty pick is always fine
+    if "@" in v:
+        return False
+    if _PROSE_PRONOUNS_RE.search(v) or _DESCRIPTIVE_SENTENCE_RE.search(v):
+        return False
+    if v.rstrip().endswith((".", "!", "?")) and len(v.split()) > 8:
+        return False
+    return True
 
 
 def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> tuple:
-    """Ask the local model to extract job fields. Returns (dict|None, status_str).
-    Never raises — any failure (Ollama not installed/running, model missing,
-    timeout, malformed response) is reported via the status string so callers
-    can fall back gracefully."""
+    """Ask the local model WHICH LINE of the JD contains each field (never to
+    write the value itself), then extract that field's value as the literal
+    text of that line. Returns (dict|None, status_str). Never raises — any
+    failure (Ollama not installed/running, model missing, timeout, malformed
+    response) is reported via the status string so callers can fall back
+    gracefully."""
     if not text or not text.strip():
         return None, "empty text"
+
+    lines = _numbered_lines(text)
+    if not lines:
+        return None, "no usable lines"
+
     if not ensure_ai_ready(model):
         return None, "Ollama not available (not installed, not running, or model could not be pulled)"
 
+    numbered_text = "\n".join(f"{i + 1}: {ln}" for i, ln in enumerate(lines))
     payload = {
         "model": model,
         "format": "json",
@@ -195,7 +295,7 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
         "options": {"temperature": 0},
         "messages": [
             {"role": "system", "content": _AI_SYSTEM_PROMPT},
-            {"role": "user", "content": text.strip()[:6000]},
+            {"role": "user", "content": numbered_text[:6000]},
         ],
     }
     try:
@@ -204,59 +304,47 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
         data = json.loads(content)
         if not isinstance(data, dict):
             return None, "model returned non-object JSON"
-        # the model occasionally emits keys with stray whitespace, e.g. " recruiter_email"
-        cleaned = {
-            k.strip(): _normalize_ai_value(v)
-            for k, v in data.items()
-            if k.strip() in _AI_FIELDS
-        }
-        # Small models sometimes duplicate a value across two different fields
-        # when unsure (e.g. filling "company" and "recruiter_name" with the
-        # same company name, or "company" and "location" with the same city —
-        # both observed in testing). Use light heuristics to drop whichever
-        # field is actually wrong instead of symmetrically wiping both (which
-        # would also throw away a value that happened to be correct).
+
+        cleaned = {}
+        for field in _AI_FIELDS:
+            n = _line_number(data.get(field))
+            cleaned[field] = _strip_known_label(lines[n - 1]) if 1 <= n <= len(lines) else ""
+
+        # Two fields legitimately pointing at the exact same line (e.g. a
+        # "Title | Company | Location" line) isn't invention, just imprecise —
+        # but company/location duplicating exactly is more often the model
+        # picking one line for both, so prefer keeping it as the location.
         if cleaned.get("company") and cleaned.get("company") == cleaned.get("location"):
-            cleaned["company"] = ""  # a bare city name is more likely the location
+            cleaned["company"] = ""
 
-        rec_name_val = cleaned.get("recruiter_name", "")
-        looks_like_a_company = bool(re.search(
-            r"(?i:\bGmbH\b|\bAG\b|\bInc\.?\b|\bLLC\b|\bLtd\.?\b|\bCorp\.?\b|\bSE\b|\bPLC\b)", rec_name_val
-        ))
-        if rec_name_val and (
-            looks_like_a_company
-            or rec_name_val == cleaned.get("company")
-            or rec_name_val == cleaned.get("location")
-        ):
-            cleaned["recruiter_name"] = ""  # a company/location name is not a person's name
-
-        # Reject company/role guesses that share literally no words with the
-        # source text — a genuine value (even a paraphrased role, or a company
-        # guessed from an email domain) will always have at least one word in
-        # common with the JD; zero overlap is a strong sign it was invented.
-        text_lower = text.lower()
-        for field in ("company", "role"):
-            val = cleaned.get(field, "")
-            words = re.findall(r"[a-zA-ZÄÖÜäöüß]{3,}", val)
-            if val and words and not any(w.lower() in text_lower for w in words):
-                cleaned[field] = ""
-
-        # A genuine salary figure is always copied from the JD, never invented —
-        # reject one whose numbers don't appear anywhere in the source text.
-        if cleaned.get("salary_range") and not _plausible_numbers(cleaned["salary_range"], text):
+        if cleaned.get("salary_range") and not _looks_like_salary(cleaned["salary_range"]):
             cleaned["salary_range"] = ""
-
-        # Contact info is the highest-risk field for hallucination — a genuine
-        # phone number or email is always copied verbatim from the JD, never
-        # paraphrased, so reject anything that doesn't actually appear in the
-        # source text rather than risk inventing a recruiter's contact details.
-        norm_text = re.sub(r"\s+", "", text)
-        for field in ("recruiter_phone", "recruiter_email"):
-            val = cleaned.get(field, "")
-            if val and re.sub(r"\s+", "", val) not in norm_text:
+        # A company/role/location line that IS a salary figure (e.g. the
+        # model duplicating the salary line into "company" too — observed in
+        # testing) is never legitimate; drop it from those fields.
+        for field in ("company", "role", "location"):
+            if cleaned.get(field) and _looks_like_salary(cleaned[field]):
                 cleaned[field] = ""
-        if "@" in cleaned.get("recruiter_name", ""):
-            cleaned["recruiter_name"] = ""  # that's an email, not a name
+        if cleaned.get("recruiter_phone") and not _looks_like_phone(cleaned["recruiter_phone"]):
+            cleaned["recruiter_phone"] = ""
+        if cleaned.get("recruiter_email") and not _looks_like_email(cleaned["recruiter_email"]):
+            cleaned["recruiter_email"] = ""
+        if cleaned.get("recruiter_name") and not _looks_like_person_name(cleaned["recruiter_name"]):
+            cleaned["recruiter_name"] = ""
+        # company/role/location should be short label-like lines, not prose —
+        # reject a line that reads like a narrative sentence (see comment on
+        # _looks_like_a_heading) or is absurdly long (a whole paragraph).
+        for field in ("company", "role", "location"):
+            val = cleaned.get(field, "")
+            if val and (len(val) > 100 or not _looks_like_a_heading(val)):
+                cleaned[field] = ""
+
+        # Second pass: re-confirm each surviving candidate with a focused
+        # yes/no question rather than trusting the first pass's line-picking
+        # alone — catches the model having selected a real-but-wrong line
+        # (e.g. a sentence that only mentions the company in passing).
+        cleaned = _verify_selections(cleaned, model, timeout)
+
         return cleaned, "ok"
     except urllib.error.URLError as e:
         global _ollama_ready
@@ -264,6 +352,43 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
         return None, f"Ollama request failed: {e}"
     except Exception as e:
         return None, f"AI extraction failed: {e}"
+
+
+def _verify_selections(cleaned: dict, model: str, timeout: float) -> dict:
+    """Ask the model to confirm each candidate value actually IS the field it
+    was assigned to. Best-effort: if this second call fails for any reason
+    (timeout, Ollama hiccup, bad JSON), the original picks are kept as-is
+    rather than losing otherwise-good results to a flaky follow-up request."""
+    candidates = {f: v for f, v in cleaned.items() if v}
+    if not candidates:
+        return cleaned
+    prompt = "\n".join(f"{f}: {v}" for f, v in candidates.items())
+    payload = {
+        "model": model,
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": _AI_VERIFY_PROMPT},
+            {"role": "user", "content": prompt[:4000]},
+        ],
+    }
+    try:
+        resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
+        content = resp.get("message", {}).get("content", "")
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            return cleaned
+        for field in candidates:
+            verdict = data.get(field)
+            rejected = verdict is False or (
+                isinstance(verdict, str) and verdict.strip().lower() in ("false", "no", "0")
+            )
+            if rejected:
+                cleaned[field] = ""
+    except Exception:
+        pass  # verification is best-effort; keep the first pass's picks
+    return cleaned
 
 
 # ── Field extractors ──────────────────────────────────────────────────────────
