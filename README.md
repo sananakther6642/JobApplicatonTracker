@@ -6,7 +6,7 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
-[![Flask](https://img.shields.io/badge/flask-2.x-green.svg)](https://flask.palletsprojects.com)
+[![Flask](https://img.shields.io/badge/flask-3.x-green.svg)](https://flask.palletsprojects.com)
 [![SQLite](https://img.shields.io/badge/database-SQLite-lightgrey.svg)](https://sqlite.org)
 
 *Track applications · Log timelines · Compare offers · Generate from JD · No accounts, no sync, no BS*
@@ -28,8 +28,8 @@ JAT is a local-first job application tracker. Run it on your machine, open it in
 ## Quick Start
 
 ```bash
-# 1. Install the only dependency
-pip3 install flask
+# 1. Install dependencies
+pip3 install flask flask-login
 
 # 2. Run
 ./start.sh
@@ -134,12 +134,11 @@ python3 gen_job.py --jd-file jd.txt --cv CV.pdf --push
 | Key | Action |
 |-----|--------|
 | `N` | Add job (full form) |
-| `Q` | Quick add (2-field modal) |
 | `G` | Generate from JD |
 | `D` | Dashboard |
 | `J` | All jobs |
 | `S` | Stats |
-| `Esc` | Close modal / dropdown |
+| `Esc` | Close dropdown |
 
 ---
 
@@ -176,18 +175,27 @@ jat/
 ├── push_job.sh         # ./push_job.sh job.json — push via API
 ├── job_template.json   # Blank template to fill per application
 ├── api.txt             # Full API reference + curl examples
+├── pytest.ini          # Test configuration
 ├── LICENSE
 │
 ├── jobs.db             # Your data — gitignored
 ├── uploads/            # Your documents — gitignored
 │
+├── docs/
+│   └── index.html      # GitHub Pages landing page
+│
+├── tests/
+│   ├── conftest.py           # pytest fixtures (in-memory test DB)
+│   ├── test_helpers.py       # Unit tests — slugify, save_tags, get_tags_for_jobs
+│   └── test_routes.py        # Integration tests — all major routes
+│
 └── templates/
-    ├── base.html             # Shared nav, dark mode, quick-add modal, CSS
-    ├── dashboard.html        # KPIs, kanban, goals, alerts, activity feed
+    ├── base.html             # Shared nav, dark mode, CSS
+    ├── dashboard.html        # KPIs, pipeline, goals, alerts, activity feed
     ├── index.html            # Job list — search, filter, sort, bulk actions
-    ├── add_job.html          # Add form with autosave drafts
+    ├── add_job.html          # Add form
     ├── edit_job.html         # Edit form with status pill picker
-    ├── job_detail.html       # Full view — timeline chart, docs, checklist
+    ├── job_detail.html       # Full view — timeline, docs, checklist
     ├── stats.html            # Charts, heatmap, funnel, rejection breakdown
     ├── email_templates.html  # Smart fill templates + timeline logging
     ├── generate.html         # JD → JSON → push UI
@@ -208,6 +216,28 @@ jat/
 - `jobs.db` and `uploads/` are gitignored — never committed
 - Nothing is sent to any server, ever
 - Delete `jobs.db` to wipe everything. That's the whole data model.
+
+---
+
+## Testing
+
+47 pytest tests covering routes, helpers, and DB logic.
+
+```bash
+# Install test dependency (one-time)
+pip3 install pytest-flask
+
+# Run all tests
+python3 -m pytest
+
+# Verbose
+python3 -m pytest -v
+
+# Specific file
+python3 -m pytest tests/test_helpers.py
+```
+
+Tests use an isolated in-memory SQLite DB — your `jobs.db` is never touched.
 
 ---
 

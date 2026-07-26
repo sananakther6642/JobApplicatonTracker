@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from datetime import date, timedelta
 
 app = Flask(__name__)
-app.secret_key = "job-tracker-secret-key-2024"
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 DB = os.path.join(os.path.dirname(__file__), "jobs.db")
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -297,7 +297,6 @@ def dashboard():
             ORDER BY t.created_at DESC LIMIT 10
         """).fetchall()
 
-        # Follow-ups: explicit follow_up_date <= today  OR  applied 7+ days ago with no follow_up_date
         followups = conn.execute("""
             SELECT * FROM jobs
             WHERE status NOT IN ('offer','rejected','withdrawn')
@@ -312,7 +311,6 @@ def dashboard():
             ORDER BY applied_date ASC
         """, (today,)).fetchall()
 
-        # Deadlines: offer_deadline within next 7 days
         deadlines = conn.execute("""
             SELECT * FROM jobs
             WHERE offer_deadline != '' AND offer_deadline IS NOT NULL
@@ -335,10 +333,10 @@ def dashboard():
         # Interview countdowns
         upcoming_interviews = {}
         rows = conn.execute("""
-            SELECT job_id, MIN(interview_date) as next_date
-            FROM interview_rounds
-            WHERE interview_date >= date('now')
-            GROUP BY job_id
+            SELECT ir.job_id, MIN(ir.interview_date) as next_date
+            FROM interview_rounds ir JOIN jobs j ON ir.job_id = j.id
+            WHERE ir.interview_date >= date('now')
+            GROUP BY ir.job_id
         """).fetchall()
         for row in rows:
             try:
@@ -453,26 +451,28 @@ def index():
     per_page = 20
 
     join_clause = ""
-    where_clause = "WHERE 1=1"
+    where_parts = []
     params = []
 
     if tag_filter:
         join_clause = " JOIN tags ON tags.job_id = jobs.id"
 
     if status_filter:
-        where_clause += " AND jobs.status = ?"
+        where_parts.append("jobs.status = ?")
         params.append(status_filter)
 
     if starred_only:
-        where_clause += " AND jobs.starred = 1"
+        where_parts.append("jobs.starred = 1")
 
     if search:
-        where_clause += " AND (jobs.company LIKE ? OR jobs.role LIKE ? OR jobs.notes LIKE ? OR jobs.jd LIKE ?)"
+        where_parts.append("(jobs.company LIKE ? OR jobs.role LIKE ? OR jobs.notes LIKE ? OR jobs.jd LIKE ?)")
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
 
     if tag_filter:
-        where_clause += " AND tags.name = ?"
+        where_parts.append("tags.name = ?")
         params.append(tag_filter.lower())
+
+    where_clause = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
     valid_sorts = ["applied_date", "company", "role", "status", "created_at"]
     if sort not in valid_sorts:
@@ -948,7 +948,8 @@ def delete_doc(doc_id):
 @app.route("/job/<int:job_id>/add_event", methods=["POST"])
 def add_event(job_id):
     with get_db() as conn:
-        if not conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone():
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
             abort(404)
         conn.execute(
             "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
@@ -971,7 +972,6 @@ def api_add_timeline():
     notes   = (d.get("notes") or "").strip()
     if not job_ids or not event:
         return {"error": "job_ids and event required"}, 400
-    # coerce each id to int, skip non-integers (bug 3)
     safe_ids = []
     for jid in job_ids:
         try:
@@ -1001,6 +1001,9 @@ def api_add_timeline():
 @app.route("/job/<int:job_id>/delete", methods=["POST"])
 def delete_job(job_id):
     with get_db() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            abort(404)
         docs = conn.execute(
             "SELECT filename FROM documents WHERE job_id=?", (job_id,)
         ).fetchall()
@@ -1214,6 +1217,9 @@ def interviews(job_id):
 @app.route("/job/<int:job_id>/interviews/<int:round_id>/delete", methods=["POST"])
 def delete_round(job_id, round_id):
     with get_db() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            abort(404)
         conn.execute(
             "DELETE FROM interview_rounds WHERE id=? AND job_id=?", (round_id, job_id)
         )
@@ -1847,7 +1853,7 @@ def contacts():
     with get_db() as conn:
         if search:
             contacts_list = conn.execute(
-                """SELECT * FROM contacts WHERE name LIKE ? OR email LIKE ? OR company LIKE ?
+                """SELECT * FROM contacts WHERE (name LIKE ? OR email LIKE ? OR company LIKE ?)
                    ORDER BY name ASC""",
                 (f"%{search}%", f"%{search}%", f"%{search}%")
             ).fetchall()
