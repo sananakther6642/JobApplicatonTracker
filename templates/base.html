@@ -6,10 +6,9 @@
 <title>{% block title %}JAT{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    /* Light — clean slate */
     --bg: #f1f5f9;
     --bg2: #e8eef5;
     --white: #ffffff;
@@ -18,11 +17,10 @@
     --text: #0f172a;
     --text2: #475569;
     --text3: #94a3b8;
-    /* Indigo accent + green positive (design system: SaaS dashboard) */
     --accent: #4f46e5;
     --accent2: #6366f1;
     --accent-light: #eef2ff;
-    --accent-glow: rgba(79,70,229,.14);
+    --accent-glow: rgba(79,70,229,.15);
     --danger: #e11d48;
     --danger-light: #fff1f2;
     --success: #059669;
@@ -39,39 +37,38 @@
     --nav-bg: rgba(255,255,255,0.92);
   }
 
-  /* Dark — deep canonical palette (design system: Modern Dark / Fasting Indigo) */
   [data-theme="dark"] {
-    --bg: #0f172a;
-    --bg2: #151d39;
-    --white: #192134;
-    --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.12);
-    --text: #f8fafc;
+    --bg: #0a0f1e;
+    --bg2: #111827;
+    --white: #1a2235;
+    --border: #1e293b;
+    --border2: #2d3f55;
+    --text: #f0f4ff;
     --text2: #94a3b8;
     --text3: #4b5e77;
-    --accent: #6366f1;
-    --accent2: #818cf8;
+    --accent: #818cf8;
+    --accent2: #a5b4fc;
     --accent-light: #1e1b4b;
-    --accent-glow: rgba(99,102,241,.2);
-    --danger: #f43f5e;
-    --danger-light: #1a0a10;
-    --success: #22c55e;
-    --success-light: #052e16;
-    --warn: #f59e0b;
+    --accent-glow: rgba(129,140,248,.15);
+    --danger: #fb7185;
+    --danger-light: #1f0a10;
+    --success: #34d399;
+    --success-light: #022c22;
+    --warn: #fbbf24;
     --warn-light: #1c1200;
     --purple: #a78bfa;
     --purple-light: #1e1040;
-    --shadow: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
-    --shadow-md: 0 4px 12px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.4);
-    --shadow-lg: 0 10px 25px rgba(0,0,0,.6), 0 4px 8px rgba(0,0,0,.4);
-    --nav-bg: rgba(15,23,42,0.95);
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,.5), 0 4px 8px rgba(0,0,0,.3);
+    --nav-bg: rgba(26,34,53,0.95);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -234,15 +231,15 @@
   .s-withdrawn  { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
   .s-ghosted    { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
 
-  [data-theme="dark"] .s-applied    { background: rgba(99,102,241,.15); color: #a5b4fc; border-color: rgba(99,102,241,.3); }
-  [data-theme="dark"] .s-screening  { background: rgba(139,92,246,.15); color: #c4b5fd; border-color: rgba(139,92,246,.3); }
-  [data-theme="dark"] .s-phone      { background: rgba(245,158,11,.12); color: #fcd34d; border-color: rgba(245,158,11,.3); }
-  [data-theme="dark"] .s-technical  { background: rgba(249,115,22,.12); color: #fdba74; border-color: rgba(249,115,22,.3); }
-  [data-theme="dark"] .s-final      { background: rgba(232,121,249,.12); color: #f0abfc; border-color: rgba(232,121,249,.3); }
-  [data-theme="dark"] .s-offer      { background: rgba(34,197,94,.12); color: #4ade80; border-color: rgba(34,197,94,.3); }
-  [data-theme="dark"] .s-rejected   { background: rgba(244,63,94,.12); color: #fda4af; border-color: rgba(244,63,94,.3); }
-  [data-theme="dark"] .s-withdrawn  { background: rgba(148,163,184,.08); color: #94a3b8; border-color: rgba(148,163,184,.2); }
-  [data-theme="dark"] .s-ghosted    { background: rgba(100,116,139,.08); color: #64748b; border-color: rgba(100,116,139,.2); }
+  [data-theme="dark"] .s-applied    { background: #1e1b4b; color: #a5b4fc; border-color: #312e81; }
+  [data-theme="dark"] .s-screening  { background: #2e1065; color: #c4b5fd; border-color: #4c1d95; }
+  [data-theme="dark"] .s-phone      { background: #2d1e00; color: #fcd34d; border-color: #451a03; }
+  [data-theme="dark"] .s-technical  { background: #2a1200; color: #fdba74; border-color: #431407; }
+  [data-theme="dark"] .s-final      { background: #2d0a40; color: #f0abfc; border-color: #581c87; }
+  [data-theme="dark"] .s-offer      { background: #022c22; color: #6ee7b7; border-color: #065f46; }
+  [data-theme="dark"] .s-rejected   { background: #2d0014; color: #fda4af; border-color: #881337; }
+  [data-theme="dark"] .s-withdrawn  { background: #1a2235; color: #94a3b8; border-color: #2d3f55; }
+  [data-theme="dark"] .s-ghosted    { background: #1a2235; color: #64748b; border-color: #1e293b; }
 
   /* ── Timeline ── */
   .timeline { list-style: none; padding-left: 22px; position: relative; }
@@ -434,27 +431,6 @@
   @media (max-width: 480px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .job-card-row { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
-  }
-
-  /* ── Accessibility & UX compliance (design system checklist) ── */
-  /* cursor:pointer on all interactive non-link elements */
-  button, [role="button"], label[for], select { cursor: pointer; }
-
-  /* Focus-visible ring — keyboard nav visible, mouse click clean */
-  :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-  :focus:not(:focus-visible) { outline: none; }
-
-  /* prefers-reduced-motion — disable all transitions/animations */
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
   }
 </style>
 </head>
