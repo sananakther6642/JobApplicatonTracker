@@ -13,7 +13,11 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import date
 from io import StringIO
 
@@ -27,6 +31,239 @@ def pdf_to_text(path: str) -> str:
     except Exception as e:
         print(f"[warn] Could not read PDF {path}: {e}", file=sys.stderr)
         return ""
+
+
+# ── Local AI gap-filler (offline, via Ollama) ──────────────────────────────────
+#
+# The regex extractors below are the primary, fast, deterministic path and
+# handle structured job postings well. For unstructured/prose-style JDs where
+# the regexes come up empty, we optionally ask a small local LLM (run entirely
+# offline via Ollama, free, no API keys) to fill in ONLY the fields the regex
+# missed. The AI is never used to override a value the regex already found —
+# see generate() below.
+
+AI_MODEL = "qwen2.5:0.5b"
+_OLLAMA_URL = "http://localhost:11434"
+_AI_FIELDS = ("company", "role", "location", "salary_range",
+              "recruiter_name", "recruiter_email", "recruiter_phone")
+_AI_SYSTEM_PROMPT = (
+    "You extract structured fields from a job posting (it may be in English, German, or a mix). "
+    "Read the job description and output ONLY one JSON object with exactly these keys: "
+    "company, role, location, salary_range, recruiter_name, recruiter_email, recruiter_phone. "
+    "Every value MUST be a single plain string, never a list/array/number — e.g. "
+    'salary_range must look like "65000-80000 EUR", not [65000, 80000]. '
+    'Use "" for any field that is not present in the text. Never invent information, and never '
+    "reuse the same value for two different fields (e.g. a city is a location, not a company name)."
+)
+
+_ollama_ready = False  # cached per-process once a model has been confirmed available
+
+# Set by generate() after each call so callers (e.g. app.py) can show the user
+# whether/why the AI gap-filler ran. One of:
+#   "skipped (regex found company and role)" / "ok" / "empty text" /
+#   "Ollama not available" / "AI extraction failed: <reason>" / "model returned non-object JSON"
+LAST_AI_STATUS = ""
+
+
+def _ollama_request(path: str, payload: dict = None, method: str = "GET", timeout: float = 5):
+    url = _OLLAMA_URL + path
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(
+        url, data=data, method=method,
+        headers={"Content-Type": "application/json"} if data else {},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _is_ollama_up(timeout: float = 1.5) -> bool:
+    try:
+        _ollama_request("/api/tags", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
+
+def _model_available(model: str, timeout: float = 3) -> bool:
+    try:
+        tags = _ollama_request("/api/tags", timeout=timeout)
+        return any(m.get("name") == model for m in tags.get("models", []))
+    except Exception:
+        return False
+
+
+def _start_ollama_server() -> bool:
+    try:
+        subprocess.Popen(
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError:
+        return False  # ollama isn't installed
+    for _ in range(12):  # give it ~6s to come up
+        time.sleep(0.5)
+        if _is_ollama_up():
+            return True
+    return False
+
+
+def pull_ai_model_blocking(model: str = AI_MODEL, timeout: float = 600) -> bool:
+    """Blocking model download — only meant to be called from start.sh / the CLI
+    setup path, NEVER from a live web request (a first-time pull can take
+    minutes, which would make the UI look stuck)."""
+    try:
+        subprocess.run(
+            ["ollama", "pull", model], timeout=timeout, check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def ensure_ai_ready(model: str = AI_MODEL) -> bool:
+    """Best-effort, bounded check that a local Ollama server is running and
+    the model is already pulled. Will start the server if it's stopped (fast,
+    ~6s max) but will NOT download the model on demand — that only happens
+    via start.sh or pull_ai_model_blocking(), so a request can never block for
+    minutes waiting on a download. Safe to call repeatedly — cheap no-op once
+    ready, and cheap to fail fast if the model just isn't there yet."""
+    global _ollama_ready
+    if _ollama_ready:
+        return True
+    if not _is_ollama_up():
+        if not _start_ollama_server():
+            return False
+    if not _model_available(model):
+        return False  # don't block a request on a multi-minute download
+    _ollama_ready = True
+    return True
+
+
+_AI_NULL_PHRASES = {
+    "not provided", "not specified", "not mentioned", "not given",
+    "not available", "n/a", "na", "none", "unknown", "not found",
+    "not applicable", "not listed", "not stated",
+}
+
+
+def _normalize_ai_value(v) -> str:
+    """The model is instructed to always return plain strings, but a small
+    model occasionally returns a list instead (e.g. salary_range as [65000,
+    80000] instead of "65000-80000"). Normalize whatever comes back into a
+    single clean string, and treat placeholder non-answers like "not
+    provided"/"not specified" as blank instead of taking them literally."""
+    if v is None:
+        return ""
+    if isinstance(v, (list, tuple)):
+        parts = [str(x).strip() for x in v if str(x).strip()]
+        s = f"{parts[0]} - {parts[1]}" if len(parts) == 2 else ", ".join(parts)
+    else:
+        s = str(v).strip()
+    if s.strip().lower().rstrip(".") in _AI_NULL_PHRASES:
+        return ""
+    return s
+
+
+def _plausible_numbers(value: str, text: str, min_len: int = 3) -> bool:
+    """A genuine figure (salary, phone, etc.) is always copied from the JD —
+    reject a value whose numbers don't appear anywhere in the source text
+    (ignoring formatting like commas/periods/spaces), which is a strong sign
+    the model fabricated it rather than read it."""
+    significant = [d for d in re.findall(r"\d+", value) if len(d) >= min_len]
+    if not significant:
+        return True  # nothing numeric to verify (e.g. "competitive"); let it through
+    text_digits = re.sub(r"\D", "", text)
+    return any(d in text_digits for d in significant)
+
+
+def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> tuple:
+    """Ask the local model to extract job fields. Returns (dict|None, status_str).
+    Never raises — any failure (Ollama not installed/running, model missing,
+    timeout, malformed response) is reported via the status string so callers
+    can fall back gracefully."""
+    if not text or not text.strip():
+        return None, "empty text"
+    if not ensure_ai_ready(model):
+        return None, "Ollama not available (not installed, not running, or model could not be pulled)"
+
+    payload = {
+        "model": model,
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0},
+        "messages": [
+            {"role": "system", "content": _AI_SYSTEM_PROMPT},
+            {"role": "user", "content": text.strip()[:6000]},
+        ],
+    }
+    try:
+        resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
+        content = resp.get("message", {}).get("content", "")
+        data = json.loads(content)
+        if not isinstance(data, dict):
+            return None, "model returned non-object JSON"
+        # the model occasionally emits keys with stray whitespace, e.g. " recruiter_email"
+        cleaned = {
+            k.strip(): _normalize_ai_value(v)
+            for k, v in data.items()
+            if k.strip() in _AI_FIELDS
+        }
+        # Small models sometimes duplicate a value across two different fields
+        # when unsure (e.g. filling "company" and "recruiter_name" with the
+        # same company name, or "company" and "location" with the same city —
+        # both observed in testing). Use light heuristics to drop whichever
+        # field is actually wrong instead of symmetrically wiping both (which
+        # would also throw away a value that happened to be correct).
+        if cleaned.get("company") and cleaned.get("company") == cleaned.get("location"):
+            cleaned["company"] = ""  # a bare city name is more likely the location
+
+        rec_name_val = cleaned.get("recruiter_name", "")
+        looks_like_a_company = bool(re.search(
+            r"(?i:\bGmbH\b|\bAG\b|\bInc\.?\b|\bLLC\b|\bLtd\.?\b|\bCorp\.?\b|\bSE\b|\bPLC\b)", rec_name_val
+        ))
+        if rec_name_val and (
+            looks_like_a_company
+            or rec_name_val == cleaned.get("company")
+            or rec_name_val == cleaned.get("location")
+        ):
+            cleaned["recruiter_name"] = ""  # a company/location name is not a person's name
+
+        # Reject company/role guesses that share literally no words with the
+        # source text — a genuine value (even a paraphrased role, or a company
+        # guessed from an email domain) will always have at least one word in
+        # common with the JD; zero overlap is a strong sign it was invented.
+        text_lower = text.lower()
+        for field in ("company", "role"):
+            val = cleaned.get(field, "")
+            words = re.findall(r"[a-zA-ZÄÖÜäöüß]{3,}", val)
+            if val and words and not any(w.lower() in text_lower for w in words):
+                cleaned[field] = ""
+
+        # A genuine salary figure is always copied from the JD, never invented —
+        # reject one whose numbers don't appear anywhere in the source text.
+        if cleaned.get("salary_range") and not _plausible_numbers(cleaned["salary_range"], text):
+            cleaned["salary_range"] = ""
+
+        # Contact info is the highest-risk field for hallucination — a genuine
+        # phone number or email is always copied verbatim from the JD, never
+        # paraphrased, so reject anything that doesn't actually appear in the
+        # source text rather than risk inventing a recruiter's contact details.
+        norm_text = re.sub(r"\s+", "", text)
+        for field in ("recruiter_phone", "recruiter_email"):
+            val = cleaned.get(field, "")
+            if val and re.sub(r"\s+", "", val) not in norm_text:
+                cleaned[field] = ""
+        if "@" in cleaned.get("recruiter_name", ""):
+            cleaned["recruiter_name"] = ""  # that's an email, not a name
+        return cleaned, "ok"
+    except urllib.error.URLError as e:
+        global _ollama_ready
+        _ollama_ready = False  # server may have gone away; re-check next call
+        return None, f"Ollama request failed: {e}"
+    except Exception as e:
+        return None, f"AI extraction failed: {e}"
 
 
 # ── Field extractors ──────────────────────────────────────────────────────────
@@ -47,7 +284,7 @@ def extract_company(text: str) -> str:
     patterns = [
         r"\[([A-Z][A-Za-z0-9 &.,'\-]{1,58})\]\(https?://",                     # [Company Name](url) markdown link
         r"^(.{2,60}?)\s*\|",                                                    # "Title | Company | Location" header line
-        r"(?i:^\s*(?:company|employer)\s*:\s*)([^\n,|]{2,60})",                 # explicit "Company:" label
+        r"(?i:^\s*(?:company|employer|firma|unternehmen|arbeitgeber)\s*:\s*)([^\n,|]{2,60})",  # explicit "Company:"/"Firma:" label
         r"^\s*([A-Z][A-Za-z0-9&.,'\-]{1,55}\s(?:GmbH|AG|Inc\.?|LLC|Ltd\.?|Corp\.?|SE|BV|NV|SAS|AB|PLC))\.?\s*$",  # standalone legal-entity line
         r"(?i:\bat\s+)([A-Z][A-Za-z0-9&.,'\-]*(?:\s+[A-Z][A-Za-z0-9&.,'\-]*){0,4})(?=[,.\n])",  # "... at Company,"
     ]
@@ -61,8 +298,11 @@ def extract_company(text: str) -> str:
 
 
 def extract_role(text: str) -> str:
-    # Explicit label, e.g. "Position: Test Engineer"
-    m = re.search(r"(?i:^\s*(?:position|role|job\s*title|title)\s*:\s*)([^\n|]{3,90})", text, re.MULTILINE)
+    # Explicit label, e.g. "Position: Test Engineer" / "Stelle: ..." / "Jobbezeichnung: ..."
+    m = re.search(
+        r"(?i:^\s*(?:position|role|job\s*title|title|stelle|jobbezeichnung|stellenbezeichnung)\s*:\s*)([^\n|]{3,90})",
+        text, re.MULTILINE,
+    )
     if m:
         return m.group(1).strip()
 
@@ -103,7 +343,7 @@ _US_STATES = (
 
 def extract_location(text: str) -> str:
     loc = ""
-    m = re.search(r"(?i:location\s*:\s*)([^\n,|]{3,50})", text)
+    m = re.search(r"(?i:(?:location|standort)\s*:\s*)([^\n,|]{3,50})", text)
     if m:
         loc = m.group(1).strip()
     if not loc:
@@ -152,7 +392,7 @@ def extract_salary(text: str) -> str:
     #   - Mid-Level: €70,000/year
     #   - Senior: €90,000/year
     # Collapse those into one min–max range rather than truncating on a comma.
-    m = re.search(r"(?i:(?:salary|compensation)\s*:?\s*\n)((?:[^\n]*\n?){1,6})", text)
+    m = re.search(r"(?i:(?:salary|compensation|gehalt|vergütung)\s*:?\s*\n)((?:[^\n]*\n?){1,6})", text)
     section = m.group(1) if m else ""
     amounts = re.findall(r"([€$])\s?([\d.,]{4,10})", section)
     if len(amounts) >= 2:
@@ -163,7 +403,7 @@ def extract_salary(text: str) -> str:
         return f"{currency}{lo} - {currency}{hi}{suffix}"
 
     return _first([
-        r"salary[:\s]+([^\n|]{3,60})",
+        r"(?:salary|gehalt|vergütung)[:\s]+([^\n|]{3,60})",
         r"compensation[:\s]+([^\n|]{3,60})",
     ], text)
 
@@ -199,18 +439,22 @@ def _clean_phone(raw: str) -> str:
 
 
 def extract_phone(text: str) -> str:
-    """Find the recruiter's contact number, if the JD mentions one."""
-    # 1. Explicitly labeled, e.g. "Telephone: +49 7946 9194181" / "Phone: ..."
+    """Find the recruiter's contact number, if the JD mentions one.
+    Many of these postings are in German or mixed EN/DE, so labels include
+    the German equivalents (Telefon, Handy, Ansprechpartner) alongside English."""
+    # 1. Explicitly labeled, e.g. "Telephone: +49 7946 9194181" / "Telefon: ..."
     m = re.search(
-        r"(?i:\b(?:telephone|phone|tel|mobile|contact\s*no\.?|call)\b\s*(?:number)?\s*[:.]?\s*)"
+        r"(?i:\b(?:telephone|phone|tel|mobile|contact\s*no\.?|call|telefon|handy|rufnummer)\b"
+        r"\s*(?:number|nummer)?\s*[:.]?\s*)"
         r"(" + _PHONE_CORE + r")",
         text,
     )
     if m:
         return _clean_phone(m.group(1))
 
-    # 2. Same line as a "Contact:" header, e.g. "Contact: Name | email | 0731 96538563"
-    m = re.search(r"(?i:^[ \t]*contact\s*(?:person)?\s*:.*)$", text, re.MULTILINE)
+    # 2. Same line as a "Contact:"/"Ansprechpartner:" header,
+    #    e.g. "Contact: Name | email | 0731 96538563"
+    m = re.search(r"(?i:^[ \t]*(?:contact\s*(?:person)?|ansprechpartner(?:in)?)\s*:.*)$", text, re.MULTILINE)
     if m:
         line_m = re.search(_PHONE_CORE, m.group(0))
         if line_m:
@@ -231,7 +475,7 @@ def extract_recruiter(text: str) -> tuple:
     # and swallow the next line (e.g. "Sarah Simonis\nTelephone: ...").
     name = ""
     m = re.search(
-        r"(?i:contact(?:\s+person)?)[ \t]*:[ \t]*([A-Z][a-zA-Z.'\-]+(?:[ \t]+[A-Z][a-zA-Z.'\-]+){1,2})",
+        r"(?i:contact(?:\s+person)?|ansprechpartner(?:in)?)[ \t]*:[ \t]*([A-Z][a-zA-Z.'\-]+(?:[ \t]+[A-Z][a-zA-Z.'\-]+){1,2})",
         text,
     )
     if m:
@@ -296,6 +540,7 @@ def extract_resume_version(cv_path: str) -> str:
 
 def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
              cv_path: str = "", cover_path: str = "") -> dict:
+    global LAST_AI_STATUS
     text = jd_text  # primary source for most fields
 
     company  = extract_company(text)
@@ -310,6 +555,36 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
     if not rec_name and not rec_email and not rec_phone:
         # fall back to the cover letter (e.g. "Dear Mr. Smith", signed contact)
         rec_name, rec_email, rec_phone = extract_recruiter(cover_text)
+
+    # Regex extraction is the fast, accurate path for structured postings and is
+    # always authoritative — the local AI model is ONLY asked to fill in fields
+    # regex left blank (it's small/fast but noticeably less reliable, so it must
+    # never override a value regex already found). This also means well-formed
+    # JDs never pay the AI latency cost at all.
+    #
+    # Only company OR role missing triggers the AI call — those two are stated
+    # in virtually every real posting, so a blank one is a strong signal the
+    # regex didn't recognize this JD's format. location/salary/recruiter info
+    # are legitimately absent from a large fraction of real postings (most
+    # don't list salary, many don't name a specific recruiter), so a blank
+    # there is NOT treated as a failure worth paying the AI's latency for —
+    # doing so would fire the AI on nearly every JD and risks it hallucinating
+    # a value (e.g. a salary) that was simply never mentioned. Those fields are
+    # still opportunistically backfilled below if the AI does end up running.
+    if not company or not role:
+        ai_result, status = ai_extract_fields(text)
+        LAST_AI_STATUS = status
+        if ai_result:
+            company   = company   or ai_result.get("company", "")
+            role      = role      or ai_result.get("role", "")
+            location  = location  or ai_result.get("location", "")
+            salary    = salary    or ai_result.get("salary_range", "")
+            rec_name  = rec_name  or ai_result.get("recruiter_name", "")
+            rec_email = rec_email or ai_result.get("recruiter_email", "")
+            rec_phone = rec_phone or ai_result.get("recruiter_phone", "")
+    else:
+        LAST_AI_STATUS = "skipped (regex found company and role)"
+
     resume_v = extract_resume_version(cv_path)
 
     return {
@@ -388,6 +663,8 @@ def main():
         print(f"  Recruiter: {result['recruiter_name'] or '(unknown)'}"
               f" | {result['recruiter_email'] or 'no email'}"
               f" | {result['recruiter_phone'] or 'no phone'}")
+    if LAST_AI_STATUS and LAST_AI_STATUS != "skipped (regex found company and role)":
+        print(f"  AI gap-fill ({AI_MODEL}): {LAST_AI_STATUS}")
 
     if args.push:
         import urllib.request

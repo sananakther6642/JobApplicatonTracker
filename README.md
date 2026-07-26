@@ -32,14 +32,18 @@ JAT is a local-first job application tracker. Run it on your machine, open it in
 git clone https://github.com/sananakther6642/JobApplicatonTracker.git
 cd JobApplicatonTracker
 
-# 2. Run — installs Flask automatically, starts server
+# 2. Run — installs everything automatically, starts server
 ./start.sh
 
 # 3. Open
 open http://localhost:5050
 ```
 
-That's it. Flask installs automatically on first run.
+That's it. `start.sh` installs Python dependencies (Flask, pdfminer.six)
+automatically, and — best-effort, non-blocking — installs Ollama and pulls
+the small local AI model used for the optional JD-generation assist. If
+Ollama/Homebrew aren't available it just skips that step and the app runs
+fine on regex-only extraction.
 
 ---
 
@@ -58,7 +62,7 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 - **Prep checklist** — per-job checklist with progress bar
 - **Salary negotiation** — initial offer → counter → final, all tracked
 - **Documents** — upload CV, cover letter, assignments per job (auto-named)
-- **Contact book** — recruiters auto-added when you save a job
+- **Contact book** — recruiters (name, email, phone, LinkedIn) auto-added when you save a job
 
 ### Find what you need instantly
 
@@ -86,15 +90,37 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 | Rejection breakdown | Why you're being rejected |
 | Day-of-week chart | When to apply for best response |
 
-### ✨ Generate from JD (offline, no AI API needed)
+### ✨ Generate from JD (offline, no paid AI API needed)
 
 Paste a job description → all fields auto-filled:
 
 ```
-company, role, location, salary, tags, recruiter name/email, interest score, job URL, source
+company, role, location, salary, tags, recruiter name/email/phone, interest score, job URL, source
 ```
 
-Upload your CV PDF alongside → interest score calculated from keyword overlap.
+Extraction is regex-based and instant for structured postings (LinkedIn, Indeed,
+StepStone, German job boards, etc.), and understands both English and German
+labels (`Standort`, `Gehalt`, `Ansprechpartner`, `Telefon`, ...).
+
+Upload your CV/cover letter PDFs alongside → interest score calculated from
+keyword overlap with the JD.
+
+**Optional local AI assist** — if a JD is unusually unstructured (plain prose,
+no clear headings) and the regex extraction can't find a company or role, JAT
+will ask a small local model (`qwen2.5:0.5b` via [Ollama](https://ollama.com))
+to fill in *only* the missing fields. This is:
+
+- **Free and fully offline** — no API key, no cloud calls, runs entirely on your machine
+- **A gap-filler, never a primary source** — the fast regex result is always trusted first; the AI is only consulted when it's genuinely needed, so well-formed JDs never pay any AI latency
+- **Guarded against hallucination** — AI-provided numbers, phone numbers, and emails are checked against the original JD text and discarded if they don't actually appear there; a warning banner tells you when AI-filled fields are present so you know to double-check them before pushing
+- **Auto-installed** — `./start.sh` installs Ollama (via Homebrew) and pulls the model automatically on first run if they're not already present; nothing to set up by hand
+
+The JSON panel is always editable — you don't have to generate from a JD at
+all; paste or write JSON directly and push it. Whether it came from regex, AI,
+or your own typing, there's a standing disclaimer above the Push button:
+**auto-extracted and AI-assisted fields can occasionally be wrong or
+hallucinated — always review before pushing.**
+
 One click → pushed to tracker. Press `G` to open.
 
 ### Email templates with smart fill
@@ -153,9 +179,9 @@ Files are renamed automatically on upload:
 ```
 jat/
 ├── app.py              # Flask backend — all routes, DB schema, helpers
-├── gen_job.py          # Offline JD parser — extracts fields from text/PDF
-├── start.sh            # ./start.sh — auto-installs deps, starts server
-├── requirements.txt    # pip dependencies (flask)
+├── gen_job.py          # Offline JD parser — regex extraction + optional local AI gap-filler
+├── start.sh            # ./start.sh — auto-installs deps (incl. Ollama), starts server
+├── requirements.txt    # pip dependencies (flask, pdfminer.six)
 ├── pytest.ini          # Test configuration
 ├── LICENSE
 │
