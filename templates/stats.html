@@ -64,12 +64,12 @@
 
   <div>
     <div class="card" style="padding:20px 24px;margin-bottom:16px">
-      <div style="class="section-title" style="display:block">Monthly Applications</div>
+      <div class="section-title">Monthly Applications</div>
       {% if monthly %}
       {% set max_m = monthly | map(attribute='cnt') | max %}
       <div style="display:flex;align-items:flex-end;gap:8px;height:80px">
         {% for row in monthly | reverse %}
-        {% set h = ((row.cnt / max_m) * 68) | int %}
+        {% set h = ((row.cnt / max_m) * 68) | int if max_m > 0 else 0 %}
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
           <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
           <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
@@ -84,7 +84,7 @@
 
     {% if by_source %}
     <div class="card" style="padding:20px 24px">
-      <div style="class="section-title" style="display:block">Top Sources</div>
+      <div class="section-title">Top Sources</div>
       {% for row in by_source %}
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
         <span>{{ row.source }}</span>
@@ -99,7 +99,7 @@
 <!-- Day of Week chart (Feature 8) -->
 {% if dow_stats %}
 <div class="card" style="padding:20px 24px;margin-bottom:20px">
-  <div style="class="section-title" style="display:block">Applications by Day of Week</div>
+  <div class="section-title">Applications by Day of Week</div>
   {% set max_dow = dow_stats | map(attribute='cnt') | max %}
   <div style="display:flex;align-items:flex-end;gap:12px;height:80px">
     {% for row in dow_stats %}
@@ -117,7 +117,7 @@
 <!-- Rejection Breakdown (Feature 6) -->
 {% if rejection_breakdown %}
 <div class="card" style="padding:20px 24px;margin-bottom:20px">
-  <div style="class="section-title" style="display:block">Rejection Breakdown</div>
+  <div class="section-title">Rejection Breakdown</div>
   {% set total_rejected = rejection_breakdown | map(attribute='cnt') | sum %}
   {% for row in rejection_breakdown %}
   {% set pct = ((row.cnt / total_rejected * 100) | int) if total_rejected > 0 else 0 %}
@@ -137,7 +137,7 @@
 <!-- Response Rate by Source -->
 {% if source_stats %}
 <div class="card" style="padding:20px 24px;margin-bottom:20px">
-  <div style="class="section-title" style="display:block">Response Rate by Source</div>
+  <div class="section-title">Response Rate by Source</div>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead>
       <tr style="border-bottom:2px solid var(--border)">
@@ -172,7 +172,7 @@
 
 <!-- Heatmap Calendar -->
 <div class="card" style="padding:20px 24px;margin-bottom:20px">
-  <div style="class="section-title" style="display:block">Activity — Last 52 Weeks</div>
+  <div class="section-title">Activity — Last 52 Weeks</div>
   <div class="heatmap-grid">
     {% for week in heatmap_weeks %}
     <div class="heatmap-week">
@@ -187,9 +187,9 @@
   <div style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--text3)">
     <span>Less</span>
     <div style="width:12px;height:12px;border-radius:2px;background:var(--border)"></div>
-    <div style="width:12px;height:12px;border-radius:2px;background:#bfdbfe"></div>
-    <div style="width:12px;height:12px;border-radius:2px;background:#3b82f6"></div>
-    <div style="width:12px;height:12px;border-radius:2px;background:#1d4ed8"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#c7d2fe"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#818cf8"></div>
+    <div style="width:12px;height:12px;border-radius:2px;background:#4338ca"></div>
     <span>More</span>
   </div>
 </div>

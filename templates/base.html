@@ -361,18 +361,14 @@
   @keyframes slideIn { from { transform:translateX(110%) scale(.95); opacity:0; } to { transform:translateX(0) scale(1); opacity:1; } }
   @keyframes pulse-dot { 0%,100% { transform:scale(1); opacity:1; } 50% { transform:scale(1.6); opacity:.5; } }
   #gen-tip {
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
-    z-index:9999;
-    background: linear-gradient(135deg, #1e1b4b, #2d1b69);
-    color:#fff; padding:14px 20px 14px 16px; border-radius:14px;
+    background: linear-gradient(90deg, #1e1b4b, #312e81);
+    color:#fff; padding:10px 20px; border-bottom:1px solid rgba(129,140,248,.3);
     font-size:13px; display:flex; align-items:center; gap:12px;
-    box-shadow: 0 8px 32px rgba(79,70,229,.4), 0 0 0 1px rgba(129,140,248,.3);
-    max-width:480px; width:calc(100vw - 48px);
-    animation: slideIn .4s cubic-bezier(.34,1.56,.64,1);
+    width:100%;
   }
   #gen-tip a { color:#a5b4fc; font-weight:700; text-decoration:none; }
   #gen-tip a:hover { color:#c7d2fe; }
-  #gen-tip-close { background:none; border:none; color:#a5b4fc; font-size:18px; cursor:pointer; line-height:1; padding:0 0 0 4px; flex-shrink:0; }
+  #gen-tip-close { background:none; border:none; color:#a5b4fc; font-size:18px; cursor:pointer; line-height:1; padding:0 0 0 4px; flex-shrink:0; margin-left:auto; }
   .toast-undo { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); color:#fff; border-radius:6px; padding:3px 10px; cursor:pointer; font-size:12px; font-weight:600; }
   .toast-undo:hover { background:rgba(255,255,255,.25); }
   .toast-close { background:none; border:none; color:rgba(255,255,255,.5); cursor:pointer; font-size:16px; padding:0 2px; margin-left:auto; line-height:1; }
@@ -419,6 +415,10 @@
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
+  @media print {
+    .page-header h1 { -webkit-text-fill-color: var(--text) !important; background: none !important; }
+  }
+
   /* ── Mobile ── */
   @media (max-width: 768px) {
     .container { padding: 16px; }
@@ -462,16 +462,16 @@
   <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)">+ Add Job</a>
 </nav>
 
-<!-- Toast container -->
-<div id="toast-container"></div>
-
-<!-- Generate tip popup (first visit only) -->
+<!-- Generate tip banner (first visit, not on generate page) -->
 <div id="gen-tip" style="display:none">
-  <span style="font-size:20px;flex-shrink:0">✨</span>
-  <span><strong>New: Generate from JD</strong> — paste a job description and auto-fill all fields instantly.
-    <a href="{{ url_for('generate_job') }}">Try it →</a></span>
+  <span style="font-size:16px;flex-shrink:0">✨</span>
+  <span><strong>New:</strong> Auto-fill job fields from any job description.
+    <a href="{{ url_for('generate_job') }}">Try Generate →</a></span>
   <button id="gen-tip-close" onclick="dismissGenTip()" title="Dismiss">✕</button>
 </div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
 
 <!-- Quick Add Modal -->
 <div id="quick-add-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:center;justify-content:center">
@@ -655,12 +655,19 @@ document.addEventListener('keydown', e => {
 function dismissGenTip() {
   localStorage.setItem('genTipDismissed', '1');
   const el = document.getElementById('gen-tip');
-  if (el) { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }
+  if (el) {
+    el.style.maxHeight = el.offsetHeight + 'px';
+    el.style.overflow = 'hidden';
+    el.style.transition = 'max-height .3s ease, opacity .3s ease';
+    requestAnimationFrame(() => { el.style.maxHeight = '0'; el.style.opacity = '0'; });
+    setTimeout(() => el.remove(), 320);
+  }
 }
 document.addEventListener('DOMContentLoaded', () => {
-  if (!localStorage.getItem('genTipDismissed') && !window.location.pathname.startsWith('/generate')) {
+  const path = window.location.pathname;
+  if (!localStorage.getItem('genTipDismissed') && path !== '/generate') {
     const el = document.getElementById('gen-tip');
-    if (el) setTimeout(() => el.style.display='flex', 800);
+    if (el) el.style.display = 'flex';
   }
 });
 
