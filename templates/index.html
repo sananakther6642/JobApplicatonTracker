@@ -83,10 +83,11 @@ const STATUS_CLASS_MAP = {
 
 {% if jobs %}
 <form method="post" action="{{ url_for('bulk_update') }}" id="bulk-form">
-  <div style="display:flex;flex-direction:column;gap:8px">
+  <div id="job-card-list" style="display:flex;flex-direction:column;gap:8px">
     {% for job in jobs %}
     {% set d_ago = days_ago.get(job.id) %}
-    <div class="card job-card-row" id="job-card-{{ job.id }}" style="padding:14px 20px;display:flex;align-items:center;gap:12px">
+    {% set sc = {'applied':'applied','screening':'screening','phone_interview':'phone','technical_interview':'technical','final_interview':'final','offer':'offer','rejected':'rejected','withdrawn':'withdrawn','ghosted':'ghosted'} %}
+    <div class="card job-card-row s-card-{{ sc.get(job.status,'ghosted') }}" id="job-card-{{ job.id }}" style="padding:14px 20px;display:flex;align-items:center;gap:12px;border-left:3px solid transparent;transition:border-color 0.15s,box-shadow 0.2s">
       <!-- Checkbox -->
       <input type="checkbox" name="job_ids" value="{{ job.id }}"
              class="job-cb" style="width:16px;height:16px;cursor:pointer;flex-shrink:0"
@@ -136,8 +137,8 @@ const STATUS_CLASS_MAP = {
           {{ job.applied_date or '—' }}
           {% if d_ago is not none %}
           <span style="font-size:11px;font-weight:600;margin-left:4px;
-            {% if d_ago <= 7 %}color:#16a34a{% elif d_ago <= 14 %}color:#d97706{% else %}color:#dc2626{% endif %}">
-            ({{ d_ago }}d ago)
+            {% if d_ago <= 7 %}color:var(--success){% elif d_ago <= 14 %}color:var(--warn){% else %}color:var(--danger){% endif %}">
+            ({{ d_ago }}d)
           </span>
           {% endif %}
         </div>
