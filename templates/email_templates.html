@@ -4,7 +4,7 @@
 
 <div class="page-header">
   <h1>Email Templates</h1>
-  <span style="font-size:13px;color:var(--text2)">Click <span style="background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> to fill in your details</span>
+  <span style="font-size:13px;color:var(--text2)">Click <span style="background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:3px;font-weight:600">[PLACEHOLDERS]</span> to fill — picks suggestions from your saved jobs</span>
 </div>
 
 <div style="display:flex;flex-direction:column;gap:16px">
@@ -12,7 +12,7 @@
   <div class="card" style="padding:20px 24px" id="tpl-{{ loop.index }}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap">
       <div>
-        <div style="font-weight:700;font-size:15px;margin-bottom:6px">{{ tpl.title }}</div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px" data-tpl-title>{{ tpl.title }}</div>
         <div style="font-size:12px;color:var(--text2)">Subject:
           <span id="subj-rendered-{{ loop.index }}"
                 style="font-style:italic;color:var(--text)"></span>
@@ -40,6 +40,12 @@
   {% endfor %}
 </div>
 
+<!-- Suggestion backdrop -->
+<div id="ph-backdrop" style="display:none;position:fixed;inset:0;z-index:9998;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);background:rgba(0,0,0,.18)"></div>
+
+<!-- Suggestion dropdown -->
+<div id="ph-dropdown" style="display:none;position:fixed;z-index:9999;background:var(--white);border:1px solid var(--border2);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.22);min-width:260px;max-width:min(480px,90vw);width:max-content;padding:6px 0;font-size:13px;overflow:hidden"></div>
+
 <style>
 .ph {
   background: var(--accent-light);
@@ -63,10 +69,198 @@
   outline: none;
   min-width: 60px;
 }
+.ph-sugg {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text);
+}
+.ph-sugg:hover, .ph-sugg.focused { background: var(--accent-light); color: var(--accent); }
+.ph-sugg-label { font-weight: 600; word-break: break-word; white-space: normal; line-height: 1.4; }
+.ph-sugg-sub { font-size: 11px; color: var(--text3); word-break: break-word; white-space: normal; line-height: 1.3; }
+.ph-sugg:hover .ph-sugg-sub, .ph-sugg.focused .ph-sugg-sub { color: var(--accent); opacity: .75; }
+.ph-section { padding: 4px 14px 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text3); }
+.ph-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </style>
 
 <script>
-// Store raw templates
+// ── Job data from server ──────────────────────────────────────────────────────
+const JOBS = {{ jobs | tojson }};
+const SETTINGS = {{ settings | tojson }};
+
+// ── Placeholder → suggestion builder ─────────────────────────────────────────
+function getSuggestions(placeholder) {
+  const p = placeholder.replace(/^\[|\]$/g, '').toUpperCase();
+  const suggs = [];
+
+  // helpers
+  const addJob = (label, sub) => suggs.push({ label, sub, type: 'job' });
+  const addUser = (label, sub) => suggs.push({ label, sub, type: 'user' });
+  const addStatic = (label) => suggs.push({ label, sub: '', type: 'static' });
+
+  if (p === 'COMPANY') {
+    JOBS.forEach(j => addJob(j.company, j.role));
+  } else if (p === 'ROLE') {
+    JOBS.forEach(j => addJob(j.role, j.company));
+  } else if (p === 'RECRUITER_NAME' || p === 'INTERVIEWER_NAME' || p === 'INTERVIEWER_NAME / HIRING_MANAGER') {
+    JOBS.filter(j => j.recruiter_name).forEach(j => addJob(j.recruiter_name, j.company + ' · ' + j.role));
+    if (!suggs.length) addStatic('Hiring Manager');
+  } else if (p === 'DATE') {
+    JOBS.forEach(j => addJob(j.applied_date, j.company + ' — ' + j.role));
+    addStatic(new Date().toISOString().slice(0,10));
+  } else if (p === 'YOUR_NAME') {
+    const v = SETTINGS['your_name'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('Sanan Akther');
+  } else if (p === 'YOUR_EMAIL') {
+    const v = SETTINGS['your_email'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('sananakther@gmail.com');
+  } else if (p === 'YOUR_PHONE') {
+    const v = SETTINGS['your_phone'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('+49 176 74753402');
+  } else if (p === 'LINKEDIN_URL') {
+    const v = SETTINGS['linkedin_url'];
+    if (v) addUser(v, 'saved in settings');
+    addStatic('linkedin.com/in/sananakther');
+  } else if (p === 'RELEVANT_SKILL' || p === "YOUR_SKILL/EXPERIENCE" || p === 'RELEVANT_AREA') {
+    ['Python automation', 'ECU flashing & diagnostics (UDS, DoIP, CAN)',
+     'CI/CD pipeline development', 'embedded test automation',
+     'hardware-software synchronization'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_PROJECT_OR_TOPIC_DISCUSSED' || p === 'TOPIC_DISCUSSED' || p === 'KEY_TOPIC') {
+    ['automotive ECU flashing pipeline', 'diagnostic protocol testing (UDS/DoIP)',
+     'GitLab CI/CD regression testing', 'hardware-software sync middleware',
+     'LexGuard AI agentic workflow'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_ASPECT_OF_ROLE') {
+    JOBS.forEach(j => addJob(j.role + ' at ' + j.company, j.status));
+    ['the test automation scope', 'the embedded systems focus',
+     'the CI/CD integration work'].forEach(addStatic);
+  } else if (p === 'SPECIFIC_QUESTION_OR_PROBLEM') {
+    ['the coding challenge', 'the system design question',
+     'the debugging exercise', 'the architecture discussion'].forEach(addStatic);
+  } else if (p === 'BRIEF_ADDITIONAL_INSIGHT_OR_ALTERNATIVE_APPROACH') {
+    ['an alternative test architecture using pytest fixtures',
+     'a potential improvement to the CI pipeline structure',
+     'a note on scalability across firmware variants'].forEach(addStatic);
+  }
+
+  // dedupe by label
+  const seen = new Set();
+  return suggs.filter(s => { if (seen.has(s.label)) return false; seen.add(s.label); return true; });
+}
+
+// ── Dropdown ──────────────────────────────────────────────────────────────────
+let _activeInput = null;
+let _focusIdx = -1;
+let _suggItems = [];
+
+const DD = document.getElementById('ph-dropdown');
+const BD = document.getElementById('ph-backdrop');
+
+function closeDropdown() {
+  DD.style.display = 'none';
+  BD.style.display = 'none';
+  _activeInput = null;
+  _focusIdx = -1;
+  _suggItems = [];
+}
+
+document.addEventListener('click', e => {
+  if (!DD.contains(e.target) && e.target !== _activeInput) closeDropdown();
+});
+document.getElementById('ph-backdrop').addEventListener('mousedown', e => {
+  e.preventDefault();
+  closeDropdown();
+});
+
+function showDropdown(input, suggestions, placeholder) {
+  _activeInput = input;
+  _focusIdx = -1;
+  DD.innerHTML = '';
+
+  if (!suggestions.length) { closeDropdown(); return; }
+
+  // Section: from jobs
+  const jobSuggs = suggestions.filter(s => s.type === 'job');
+  const otherSuggs = suggestions.filter(s => s.type !== 'job');
+
+  if (jobSuggs.length) {
+    const sec = document.createElement('div');
+    sec.className = 'ph-section';
+    sec.textContent = 'From your jobs';
+    DD.appendChild(sec);
+    jobSuggs.forEach(s => appendItem(s));
+    if (otherSuggs.length) {
+      const hr = document.createElement('hr');
+      hr.className = 'ph-divider';
+      DD.appendChild(hr);
+    }
+  }
+  if (otherSuggs.length) {
+    const sec = document.createElement('div');
+    sec.className = 'ph-section';
+    sec.textContent = jobSuggs.length ? 'Suggestions' : 'Suggestions';
+    DD.appendChild(sec);
+    otherSuggs.forEach(s => appendItem(s));
+  }
+
+  // free-type row
+  const hr2 = document.createElement('hr');
+  hr2.className = 'ph-divider';
+  DD.appendChild(hr2);
+  const free = document.createElement('div');
+  free.className = 'ph-sugg';
+  free.innerHTML = `<span class="ph-sugg-label" style="color:var(--text3);font-weight:400">Type custom value…</span>`;
+  free.addEventListener('mousedown', e => { e.preventDefault(); input.focus(); });
+  DD.appendChild(free);
+
+  _suggItems = DD.querySelectorAll('.ph-sugg[data-val]');
+
+  // show backdrop
+  BD.style.display = 'block';
+
+  // position below/above input
+  const rect = input.getBoundingClientRect();
+  DD.style.display = 'block';
+  // clamp width to viewport
+  DD.style.maxWidth = Math.min(480, window.innerWidth - 32) + 'px';
+
+  const ddH = DD.offsetHeight;
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  if (spaceBelow >= ddH || spaceBelow >= 120) {
+    DD.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  } else {
+    DD.style.top = (rect.top + window.scrollY - ddH - 6) + 'px';
+  }
+  // left-align to input, never overflow right edge
+  const leftRaw = rect.left + window.scrollX;
+  DD.style.left = Math.max(8, Math.min(leftRaw, window.innerWidth - DD.offsetWidth - 8)) + 'px';
+}
+
+function appendItem(s) {
+  const el = document.createElement('div');
+  el.className = 'ph-sugg';
+  el.dataset.val = s.label;
+  el.innerHTML = `<span class="ph-sugg-label">${escHTML(s.label)}</span>${s.sub ? `<span class="ph-sugg-sub">${escHTML(s.sub)}</span>` : ''}`;
+  el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (_activeInput) {
+      _activeInput.value = s.label;
+      _activeInput.dispatchEvent(new Event('blur'));
+    }
+    closeDropdown();
+  });
+  DD.appendChild(el);
+}
+
+function escHTML(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Store raw templates ───────────────────────────────────────────────────────
 const RAW_SUBJECTS = {};
 const RAW_BODIES = {};
 
@@ -87,7 +281,6 @@ function renderTemplate(idx) {
 function renderInto(containerId, text, inline) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  // Split on [PLACEHOLDER] pattern
   const parts = text.split(/(\[[A-Z0-9_ /—–-]+\])/g);
   container.innerHTML = '';
   parts.forEach(part => {
@@ -95,7 +288,7 @@ function renderInto(containerId, text, inline) {
       const span = document.createElement('span');
       span.className = 'ph';
       span.textContent = part;
-      span.title = 'Click to fill in';
+      span.title = 'Click to fill';
       span.addEventListener('click', () => activatePlaceholder(span, containerId));
       container.appendChild(span);
     } else {
@@ -105,71 +298,220 @@ function renderInto(containerId, text, inline) {
 }
 
 function activatePlaceholder(span, containerId) {
+  const placeholder = span.textContent;
   const input = document.createElement('input');
   input.className = 'ph-input';
   input.value = '';
-  input.placeholder = span.textContent.replace(/^\[|\]$/g, '');
+  input.placeholder = placeholder.replace(/^\[|\]$/g, '');
   input.size = Math.max(input.placeholder.length, 8);
   span.replaceWith(input);
   input.focus();
-  input.select();
 
-  function commit() {
-    const val = input.value.trim();
-    const replacement = document.createElement('span');
-    if (val) {
-      replacement.style.cssText = 'color:var(--success);font-weight:600';
-      replacement.textContent = val;
+  // show suggestions
+  const suggs = getSuggestions(placeholder);
+  showDropdown(input, suggs, placeholder);
+
+  // filter on type — always reopen dropdown while input is active
+  input.addEventListener('input', () => {
+    _activeInput = input; // re-assert in case blur raced
+    const q = input.value.toLowerCase();
+    const allSuggs = getSuggestions(placeholder);
+    const filtered = q ? allSuggs.filter(s => s.label.toLowerCase().includes(q)) : allSuggs;
+    if (filtered.length) {
+      showDropdown(input, filtered, placeholder);
     } else {
-      replacement.className = 'ph';
-      replacement.textContent = '[' + input.placeholder + ']';
-      replacement.title = 'Click to fill in';
-      replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
+      // no matches — keep backdrop, show empty state
+      DD.innerHTML = `<div class="ph-section" style="padding:10px 16px;color:var(--text3);font-size:12px;text-transform:none;letter-spacing:0">No matches — press Enter to use typed value</div>`;
+      DD.style.display = 'block';
+      BD.style.display = 'block';
     }
-    input.replaceWith(replacement);
-    if (val) {
-      // re-wire remaining placeholders in same container so they still work
-      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
-        ph.replaceWith(ph.cloneNode(true)); // re-clone to clear old listeners
-      });
-      document.getElementById(containerId).querySelectorAll('.ph').forEach(ph => {
-        ph.addEventListener('click', () => activatePlaceholder(ph, containerId));
-      });
-    }
-  }
+  });
 
-  input.addEventListener('blur', commit);
+  // keyboard nav in dropdown
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { input.value = ''; commit(); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _focusIdx = Math.min(_focusIdx + 1, _suggItems.length - 1);
+      updateFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _focusIdx = Math.max(_focusIdx - 1, -1);
+      updateFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (_focusIdx >= 0 && _suggItems[_focusIdx]) {
+        input.value = _suggItems[_focusIdx].dataset.val;
+      }
+      closeDropdown();
+      commit(input, placeholder, containerId);
+    } else if (e.key === 'Escape') {
+      input.value = '';
+      closeDropdown();
+      commit(input, placeholder, containerId);
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // longer delay — input event must fire and re-assert _activeInput first
+    setTimeout(() => {
+      if (_activeInput === input) {
+        closeDropdown();
+        commit(input, placeholder, containerId);
+      }
+    }, 220);
   });
 }
 
+function updateFocus() {
+  _suggItems.forEach((el, i) => {
+    el.classList.toggle('focused', i === _focusIdx);
+    if (i === _focusIdx) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+// ── Per-template filled values tracker ───────────────────────────────────────
+// filledValues[idx][PLACEHOLDER_KEY] = 'filled value'
+const filledValues = {};
+
+function commit(input, placeholder, containerId) {
+  const val = input.value.trim();
+  const replacement = document.createElement('span');
+  if (val) {
+    replacement.style.cssText = 'color:var(--success);font-weight:600';
+    replacement.textContent = val;
+    // track filled value per template
+    const idx = getIdxFromContainerId(containerId);
+    if (idx) {
+      if (!filledValues[idx]) filledValues[idx] = {};
+      const key = placeholder.replace(/^\[|\]$/g, '');
+      filledValues[idx][key] = val;
+    }
+  } else {
+    replacement.className = 'ph';
+    replacement.textContent = placeholder;
+    replacement.title = 'Click to fill';
+    replacement.addEventListener('click', () => activatePlaceholder(replacement, containerId));
+  }
+  input.replaceWith(replacement);
+  const container = document.getElementById(containerId);
+  if (container) {
+    container.querySelectorAll('.ph').forEach(ph => {
+      const clone = ph.cloneNode(true);
+      clone.addEventListener('click', () => activatePlaceholder(clone, containerId));
+      ph.replaceWith(clone);
+    });
+  }
+}
+
+function getIdxFromContainerId(containerId) {
+  // e.g. 'tpl-body-2' or 'subj-rendered-2' → '2'
+  const m = containerId.match(/(\d+)$/);
+  return m ? m[1] : null;
+}
+
+function getMatchedJobIds(idx) {
+  const filled = filledValues[idx] || {};
+  const company = (filled['COMPANY'] || '').toLowerCase().trim();
+  const role    = (filled['ROLE']    || '').toLowerCase().trim();
+  if (!company && !role) return [];
+
+  return JOBS
+    .filter(j => {
+      const cMatch = !company || j.company.toLowerCase().includes(company) || company.includes(j.company.toLowerCase());
+      const rMatch = !role    || j.role.toLowerCase().includes(role)       || role.includes(j.role.toLowerCase());
+      return cMatch && rMatch;
+    })
+    .map(j => j.id);
+}
+
+function logEmailUsed(idx, tplTitle, type) {
+  const jobIds = getMatchedJobIds(idx);
+  if (!jobIds.length) return;  // no matched job → nothing to log
+
+  const filled = filledValues[idx] || {};
+  const company = filled['COMPANY'] || '';
+  const role    = filled['ROLE']    || '';
+  const noteParts = [`Sent "${tplTitle}" (${type})`];
+  if (company) noteParts.push(`to ${company}`);
+  if (role)    noteParts.push(`re: ${role}`);
+  const notes = noteParts.join(' ');
+
+  fetch('/api/timeline', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ job_ids: jobIds, event: `📧 Email Sent — ${tplTitle}`, notes }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.inserted && data.inserted.length) {
+      const links = data.inserted.map(id => `<a href="/job/${id}" style="color:var(--accent);font-weight:600">#${id}</a>`).join(', ');
+      showToast(`Timeline updated for job${data.inserted.length > 1 ? 's' : ''} ${links}`, null, 4000);
+    }
+  })
+  .catch(() => {});
+}
+
 function resetTemplate(idx) {
+  delete filledValues[idx];
   renderTemplate(String(idx));
 }
 
-function getPlainText(containerId) {
+function getRenderedText(containerId) {
+  // Works whether <details> is open or closed — reads DOM text directly
   const el = document.getElementById(containerId);
   if (!el) return '';
-  return el.innerText;
+  // Walk text nodes + filled spans, skip unfilled .ph placeholders
+  let out = '';
+  el.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.classList.contains('ph')) {
+        out += node.textContent; // keep unfilled placeholder text as-is
+      } else {
+        out += node.textContent; // filled span or any other element
+      }
+    }
+  });
+  return out;
+}
+
+function getTplTitle(idx) {
+  const card = document.getElementById('tpl-' + idx);
+  if (!card) return 'Email Template';
+  const h = card.querySelector('[data-tpl-title]');
+  return h ? h.textContent.trim() : 'Email Template';
 }
 
 function copySubject(idx) {
-  const text = getPlainText('subj-rendered-' + idx);
+  const text = getRenderedText('subj-rendered-' + idx);
+  if (!text.trim()) { showToast('Subject is empty', null, 2000); return; }
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-subj-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Subject', 2000);
+    logEmailUsed(String(idx), getTplTitle(idx), 'subject');
   }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 
 function copyBody(idx) {
-  const text = getPlainText('tpl-body-' + idx);
+  // Always read from RAW + current DOM state regardless of <details> open/closed
+  const el = document.getElementById('tpl-body-' + idx);
+  let text = '';
+  if (el) {
+    // Temporarily make visible to ensure innerText works, or use textContent walk
+    text = getRenderedText('tpl-body-' + idx);
+  }
+  // Fallback: use raw template text if DOM is empty (details never opened)
+  if (!text.trim() && RAW_BODIES[String(idx)]) {
+    text = RAW_BODIES[String(idx)];
+  }
+  if (!text.trim()) { showToast('Body is empty', null, 2000); return; }
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copy-body-' + idx);
     btn.textContent = '✓ Copied';
     setTimeout(() => btn.textContent = '📋 Copy Body', 2000);
+    logEmailUsed(String(idx), getTplTitle(idx), 'body');
   }).catch(() => showToast('Could not copy — select text manually', null, 4000));
 }
 </script>

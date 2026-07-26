@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Generate Job — JAT{% endblock %}
+{% block content %}
+
+<div class="page-header" style="margin-bottom:24px">
+  <div>
+    <h1 style="margin-bottom:4px">Generate from JD</h1>
+    <span style="font-size:13px;color:var(--text2)">Paste a job description → auto-fill JSON → push to tracker</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+  <!-- LEFT: input form -->
+  <div class="card" style="padding:24px">
+    <form method="POST" enctype="multipart/form-data" id="gen-form">
+
+      <div style="margin-bottom:18px">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Job Description <span style="color:var(--danger)">*</span></label>
+        <textarea name="jd_text" id="jd-text" rows="16"
+          placeholder="Paste the full job description here — company, role, salary, location, requirements, contacts…"
+          style="width:100%;font-family:inherit;font-size:13px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;line-height:1.6;box-sizing:border-box"
+          required>{{ request.form.get('jd_text', '') }}</textarea>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+        <div>
+          <label style="font-weight:600;font-size:12px;display:block;margin-bottom:5px;color:var(--text2)">CV / Resume PDF <span style="font-weight:400">(optional)</span></label>
+          <input type="file" name="cv_pdf" accept=".pdf"
+            style="font-size:12px;color:var(--text2);width:100%">
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">Used to score interest match</div>
+        </div>
+        <div>
+          <label style="font-weight:600;font-size:12px;display:block;margin-bottom:5px;color:var(--text2)">Cover Letter PDF <span style="font-weight:400">(optional)</span></label>
+          <input type="file" name="cover_pdf" accept=".pdf"
+            style="font-size:12px;color:var(--text2);width:100%">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;padding:11px">
+        ⚡ Generate JSON
+      </button>
+    </form>
+  </div>
+
+  <!-- RIGHT: result -->
+  <div>
+    {% if error %}
+    <div class="card" style="padding:20px;border-left:3px solid var(--danger)">
+      <div style="font-weight:600;color:var(--danger);margin-bottom:6px">Error</div>
+      <div style="font-size:13px;color:var(--text2)">{{ error }}</div>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="card" style="padding:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-weight:700;font-size:14px">Generated JSON</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="copyJSON()" class="btn btn-ghost btn-sm" id="copy-btn">📋 Copy</button>
+          <button onclick="pushJob()" class="btn btn-primary btn-sm" id="push-btn">🚀 Push to Tracker</button>
+        </div>
+      </div>
+
+      <div id="push-result" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px"></div>
+
+      <textarea id="json-output" rows="26"
+        style="width:100%;font-family:monospace;font-size:12px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;line-height:1.5;box-sizing:border-box"
+        spellcheck="false">{{ result }}</textarea>
+
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Edit fields directly before pushing. Required: company + role.</div>
+    </div>
+
+    {% else %}
+    <div class="card" style="padding:32px;text-align:center;color:var(--text3)">
+      <div style="font-size:32px;margin-bottom:12px">📋</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">No output yet</div>
+      <div style="font-size:13px">Paste a JD and click Generate</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function copyJSON() {
+  const ta = document.getElementById('json-output');
+  if (!ta) return;
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copied';
+    setTimeout(() => btn.textContent = '📋 Copy', 2000);
+  }).catch(() => showToast('Could not copy', null, 3000));
+}
+
+function pushJob() {
+  const ta = document.getElementById('json-output');
+  if (!ta) return;
+  let data;
+  try {
+    data = JSON.parse(ta.value);
+  } catch(e) {
+    showResult('error', 'Invalid JSON — fix syntax before pushing');
+    return;
+  }
+  const btn = document.getElementById('push-btn');
+  btn.textContent = '⏳ Pushing…';
+  btn.disabled = true;
+
+  fetch('/api/job', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  })
+  .then(r => r.json().then(j => ({status: r.status, body: j})))
+  .then(({status, body}) => {
+    if (status === 201) {
+      const warn = body.duplicate_warning ? ' (duplicate warning)' : '';
+      showResult('success',
+        `Pushed! <a href="${body.url}" style="color:inherit;font-weight:700">View job #${body.id}</a>${warn}`);
+    } else {
+      showResult('error', body.error || 'Push failed');
+    }
+    btn.textContent = '🚀 Push to Tracker';
+    btn.disabled = false;
+  })
+  .catch(err => {
+    showResult('error', 'Network error: ' + err.message);
+    btn.textContent = '🚀 Push to Tracker';
+    btn.disabled = false;
+  });
+}
+
+function showResult(type, html) {
+  const el = document.getElementById('push-result');
+  el.style.display = 'block';
+  if (type === 'success') {
+    el.style.background = 'var(--success-light, #f0fdf4)';
+    el.style.color = 'var(--success, #16a34a)';
+    el.style.border = '1px solid var(--success, #16a34a)';
+  } else {
+    el.style.background = '#fef2f2';
+    el.style.color = 'var(--danger)';
+    el.style.border = '1px solid var(--danger)';
+  }
+  el.innerHTML = html;
+}
+</script>
+
+{% endblock %}
