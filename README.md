@@ -256,7 +256,7 @@ Tests use an isolated in-memory SQLite DB — your `jobs.db` is never touched.
 
 Open source under the MIT License. Contributions welcome — bug fixes, new features, UI improvements, anything.
 
-**Found a bug?** Open a [GitHub issue](https://github.com/sananakther6642/jat/issues).
+**Found a bug?** Open a [GitHub issue](https://github.com/sananakther6642/JobApplicatonTracker/issues).
 
 **Want to contribute code?** Fork → branch → PR:
 
