@@ -45,11 +45,7 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-That's it. `start.sh` (Mac/Linux) or `start.bat` (Windows) installs Python dependencies (Flask, pdfminer.six)
-automatically, and — best-effort, non-blocking — installs Ollama and pulls
-the small local AI model used for the optional JD-generation assist. If
-Ollama/Homebrew aren't available it just skips that step and the app runs
-fine on regex-only extraction.
+That's it. `start.sh` (Mac/Linux) or `start.bat` (Windows) installs Python dependencies (Flask, pdfminer.six) automatically, and — best-effort, non-blocking — installs Ollama and pulls the small local AI model used for the optional JD-generation assist. If Ollama/Homebrew aren't available it just skips that step and the app runs fine on regex-only extraction.
 
 ### Opening the app
 
@@ -95,19 +91,34 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 - **Tags** — comma-separated, filterable pills on every job
 - **Click any job card** to open its full detail page — no need to hunt for a "View" button
 
-### ✨ Generate from JD & 1-Click Capture
+### ✨ Generate from JD
 
-- **Clipboard One-Click Paste**: `📋 Paste from Clipboard` button populates raw JDs in under a second
-- **Browser Bookmarklet**: Drag the `🔖 Track with JAT` bookmarklet to your browser toolbar to capture highlighted JDs from LinkedIn, Indeed, or StepStone in 1 click
-- **Offline Extraction**: Extracts company, role, location, salary, tags, recruiter info, and interest score automatically
+Paste a full job description into the **✨ Generate** page and all fields are filled automatically:
+
+```
+company · role · location · salary · tags · recruiter name/email/phone · interest score · job URL · source
+```
+
+- **Clipboard paste**: `📋 Paste from Clipboard` button populates the JD textarea in one click
+- **Offline extraction**: Regex-based and instant for structured postings (LinkedIn, Indeed, StepStone, German boards — understands both English and German labels like `Standort`, `Gehalt`, `Ansprechpartner`)
+- **Optional local AI gap-filler**: If a JD is unstructured and regex can't find a company or role, JAT asks a small local model (`qwen2.5:0.5b` via [Ollama](https://ollama.com)) to fill only the missing fields — free, fully offline, no API key required
+- **CV/Cover Letter scoring**: Upload your PDF alongside the JD → interest score is calculated from keyword overlap and the files are automatically attached to the job
+- **Always editable**: The JSON panel is editable before pushing — whether from regex, AI, or your own typing, there's a standing reminder to review before saving
+
+Upload your CV/cover letter PDFs alongside → interest score calculated from keyword overlap with the JD, **and** the files themselves are attached to the job's Documents as soon as you push.
+
+> ⚠️ **Heads up:** Auto-extracted and AI-assisted fields can occasionally be wrong — always review before pushing to the tracker.
 
 ### Dashboard that actually tells you something
 
-- Pipeline funnel + kanban board
-- Follow-up alerts — jobs you haven't heard from in 7+ days
-- Offer deadline countdown
-- Weekly + monthly application goal tracker
-- Activity feed + 52-week heatmap
+- **Pipeline kanban** — active applications grouped by stage, sorted by date
+- **Follow-up alerts** — jobs you haven't heard from in 7+ days
+- **Offer deadline countdown** — upcoming deadlines highlighted within 7 days
+- **Weekly & monthly goal tracker** — set a target application count, see live progress bars. Goals persist in the database and update correctly when changed
+- **Next Actions list** — jobs with a pending action flagged at the top
+- **Activity feed** — most recent timeline events across all jobs
+- **Monthly chart** — bar chart of application volume per month (last 6 months)
+- **Funnel breakdown** — how many applications at each stage as a percentage
 
 ### Stats worth looking at
 
@@ -119,42 +130,6 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 | Interview funnel | Where you're dropping off |
 | Rejection breakdown | Why you're being rejected |
 | Day-of-week chart | When to apply for best response |
-
-### ✨ Generate from JD (offline, no paid AI API needed)
-
-Paste a job description → all fields auto-filled:
-
-```
-company, role, location, salary, tags, recruiter name/email/phone, interest score, job URL, source
-```
-
-Extraction is regex-based and instant for structured postings (LinkedIn, Indeed,
-StepStone, German job boards, etc.), and understands both English and German
-labels (`Standort`, `Gehalt`, `Ansprechpartner`, `Telefon`, ...).
-
-Upload your CV/cover letter PDFs alongside → interest score calculated from
-keyword overlap with the JD, **and** the files themselves are attached to the
-job's Documents as soon as you push — no need to re-upload them on the job
-detail page afterward.
-
-**Optional local AI assist** — if a JD is unusually unstructured (plain prose,
-no clear headings) and the regex extraction can't find a company or role, JAT
-will ask a small local model (`qwen2.5:0.5b` via [Ollama](https://ollama.com))
-to fill in *only* the missing fields. This is:
-
-- **Free and fully offline** — no API key, no cloud calls, runs entirely on your machine
-- **A gap-filler, never a primary source** — the fast regex result is always trusted first; the AI is only consulted when it's genuinely needed, so well-formed JDs never pay any AI latency
-- **Designed so it can't fabricate content** — the model is never asked to *write* a field's value (a small model asked to do that will confidently invent one, e.g. a phone number that isn't in the JD at all — this was tested extensively). Instead it's only asked to point at *which existing line* of the JD contains each field, and the actual value is always the literal text of that line, extracted by code — not generated. On top of that, each field is sanity-checked against what it should look like (a salary line must contain a currency/number, a phone must be mostly digits, an email must look like an email, a name can't be a company) before being used.
-- **A warning banner** tells you whenever AI-filled fields are present, and the JSON panel always carries a reminder to review before pushing (see disclaimer below) — the worst realistic failure mode left is the AI pointing at the wrong *real* line, never inventing one that doesn't exist.
-- **Auto-installed** — on Mac/Linux, `./start.sh` installs Ollama (via Homebrew or the official install script) and pulls the model automatically on first run if they're not already present; nothing to set up by hand. On Windows, `start.bat` installs Python deps and attempts to install Ollama (via winget or the official installer) automatically; if that fails, install Ollama manually from https://ollama.com and run `ollama pull qwen2.5:0.5b`.
-
-The JSON panel is always editable — you don't have to generate from a JD at
-all; paste or write JSON directly and push it. Whether it came from regex, AI,
-or your own typing, there's a standing disclaimer above the Push button:
-**auto-extracted and AI-assisted fields can occasionally be wrong or
-hallucinated — always review before pushing.**
-
-One click → pushed to tracker. Press `G` to open.
 
 ### Email templates with smart fill
 
@@ -232,15 +207,15 @@ jat/
 │   └── test_routes.py        # Integration tests — all major routes
 │
 └── templates/
-    ├── base.html             # Shared nav, dark mode, CSS
+    ├── base.html             # Shared nav, dark mode, CSS variables
     ├── dashboard.html        # KPIs, pipeline, goals, alerts, activity feed
     ├── index.html            # Job list — search, filter, sort, bulk actions
     ├── add_job.html          # Add form
     ├── edit_job.html         # Edit form with status pill picker
     ├── job_detail.html       # Full view — timeline, docs, checklist
-    ├── stats.html            # Charts, heatmap, funnel, rejection breakdown
+    ├── generate.html         # ✨ JD → auto-fill → push UI
+    ├── stats.html            # Charts, funnel, rejection breakdown, source stats
     ├── email_templates.html  # Smart fill templates + timeline logging
-    ├── generate.html         # JD → JSON → push UI
     ├── contacts.html         # Recruiter/contact book
     ├── checklist.html        # Per-job interview prep checklist
     ├── offers.html           # Side-by-side offer comparison
@@ -262,8 +237,6 @@ jat/
 ---
 
 ## Testing
-
-50 pytest tests covering routes, helpers, and DB logic.
 
 ```bash
 # Install test dependency (one-time)
