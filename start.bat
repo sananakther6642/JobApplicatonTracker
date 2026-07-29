@@ -29,24 +29,15 @@ if defined OLLAMA_EXE goto :check_server
 REM ---- Install Ollama ----
 echo Ollama not found. Attempting automatic installation...
 
+REM winget's installers are normally configured for silent install, so try
+REM that first -- it should complete without opening any window.
 where winget >nul 2>nul
 if %errorlevel% equ 0 (
     echo Installing Ollama via winget...
     winget install Ollama.Ollama --accept-package-agreements --accept-source-agreements >nul 2>&1
 )
 
-echo Downloading Ollama installer...
-powershell -Command "Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile '%TEMP%\OllamaSetup.exe'" >nul 2>&1
-
-if exist "%TEMP%\OllamaSetup.exe" (
-    echo Running Ollama installer...
-    start /wait "%TEMP%\OllamaSetup.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART >nul 2>&1
-    del "%TEMP%\OllamaSetup.exe" >nul 2>&1
-) else (
-    echo [warn] Could not download Ollama installer.
-)
-
-REM Refresh lookup after install
+REM Re-check before falling back to the manual installer below.
 where ollama >nul 2>nul
 if %errorlevel% equ 0 (
     set "OLLAMA_EXE=ollama"
@@ -56,11 +47,30 @@ if %errorlevel% equ 0 (
     if exist "%USERPROFILE%\.ollama\ollama.exe" set "OLLAMA_EXE=%USERPROFILE%\.ollama\ollama.exe"
 )
 
-if not defined OLLAMA_EXE (
-    echo [info] Ollama installation could not be completed -- skipping local AI setup ^(regex-only extraction will be used^).
-    echo       Install Ollama manually from https://ollama.com to enable AI-assisted extraction.
-    goto :start_server
+if defined OLLAMA_EXE goto :check_server
+
+REM winget wasn't available or didn't finish the install -- fall back to
+REM downloading the official installer directly. NOTE: Ollama's installer
+REM isn't Inno Setup-based, so it does NOT honor /VERYSILENT-style switches
+REM -- it always opens its own GUI window. It's launched WITHOUT /wait so
+REM this script never blocks on it; the app runs fine on regex-only
+REM extraction in the meantime.
+echo Downloading Ollama installer...
+powershell -Command "Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile '%TEMP%\OllamaSetup.exe'" >nul 2>&1
+
+if exist "%TEMP%\OllamaSetup.exe" (
+    echo A window from the Ollama installer will open -- complete it there if you
+    echo want AI-assisted extraction. This is optional and non-blocking; JAT will
+    echo start now using regex-only extraction and pick up Ollama automatically
+    echo the next time you run start.bat once it's installed.
+    start "" "%TEMP%\OllamaSetup.exe"
+) else (
+    echo [warn] Could not download Ollama installer.
 )
+
+echo [info] Ollama isn't ready yet -- continuing with regex-only extraction.
+echo       Re-run start.bat after finishing the installer to enable AI-assisted extraction.
+goto :start_server
 
 REM ---- Start Ollama server ----
 :check_server
