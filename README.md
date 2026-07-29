@@ -73,23 +73,34 @@ start http://localhost:5050
 Applied → Screening → Phone Interview → Technical → Final → Offer ✓
                                                           ↘ Rejected ✗
                                                           ↘ Ghosted 👻
+                                                          ↘ Archived 📦
 ```
 
-- **9 status stages** with auto-logged timeline on every change
+- **9 status stages + Archiving** with auto-logged timeline on every change
+- **Duplicate Detection** — live warning on job creation if company + role already exists
+- **Priority Scoring (0–100)** — automatically computes job urgency based on stage, application age, interest, and follow-ups (`🔥 High`, `⚡ Med`, `Low`)
+- **Quick Notes** — inline editable notes directly on job list cards with instant auto-save
 - **Interview rounds** — notes, questions asked, outcome per round
 - **Prep checklist** — per-job checklist with progress bar
 - **Salary negotiation** — initial offer → counter → final, all tracked
-- **Documents** — upload CV, cover letter, assignments per job (auto-named)
+- **Documents & PDF Export** — upload CV, cover letter, assignments per job (auto-named) and export clean PDF snapshots for printing
 - **Contact book** — recruiters (name, email, phone, LinkedIn) auto-added when you save a job
 - **Automated DB Auto-Backup** — `jobs.db.bak` is created on server boot to protect data against accidental loss
 
 ### Find what you need instantly
 
 - **Live search** across company, role, JD, notes — filters as you type (debounced AJAX, no page reload) with result highlighting
-- **Filter** by status, tag, starred, source, date range
+- **Filter** by status, tag, starred, archived, source, date range
 - **Sort** by date, company, salary, interest score
 - **Tags** — comma-separated, filterable pills on every job
 - **Click any job card** to open its full detail page — no need to hunt for a "View" button
+
+### 🗂️ Drag-and-Drop Kanban & 📅 Interview Calendar
+
+- **Interactive Kanban Board (`/kanban`)** — drag-and-drop job cards across stage columns with instant status update
+- **Interview Calendar (`/calendar`)** — monthly grid and mobile list view displaying all scheduled interview dates
+- **Auto Dark/Light Mode** — auto-detects system `prefers-color-scheme` with manual toggle fallback
+- **Mobile-Responsive Layout** — optimized mobile layouts with responsive navigation menu
 
 ### ✨ Generate from JD
 
@@ -112,7 +123,7 @@ Upload your CV/cover letter PDFs alongside → interest score calculated from ke
 ### Dashboard that actually tells you something
 
 - **Pipeline kanban** — active applications grouped by stage, sorted by date
-- **Follow-up alerts** — jobs you haven't heard from in 7+ days
+- **Follow-up alerts** — jobs you haven't heard from in 7+ days with direct "✉ Draft" email template links
 - **Offer deadline countdown** — upcoming deadlines highlighted within 7 days
 - **Weekly & monthly goal tracker** — set a target application count, see live progress bars. Goals persist in the database and update correctly when changed
 - **Next Actions list** — jobs with a pending action flagged at the top
@@ -124,12 +135,14 @@ Upload your CV/cover letter PDFs alongside → interest score calculated from ke
 
 | Metric | What it shows |
 |--------|---------------|
-| Offer rate | How many applications → offers |
-| Response rate by source | Which job board actually works |
+| Application Velocity | Weekly application count bar chart (last 12 weeks) |
+| Source Conversion Funnel | Applied → Interview → Offer breakdown per source |
+| Response rate by source | Which job board actually yields responses |
 | Avg days to response | How long companies actually take |
 | Interview funnel | Where you're dropping off |
 | Rejection breakdown | Why you're being rejected |
 | Day-of-week chart | When to apply for best response |
+| Salary breakdown | Salary ranges grouped by role and location |
 
 ### Email templates with smart fill
 
