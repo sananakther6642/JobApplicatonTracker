@@ -10,10 +10,21 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from werkzeug.utils import secure_filename
 from datetime import date, timedelta
 
-app = Flask(__name__)
+import sys
+import webbrowser
+import threading
+
+if getattr(sys, 'frozen', False):
+    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    APP_DIR = BASE_DIR
+
+app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
-DB = os.path.join(os.path.dirname(__file__), "jobs.db")
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+DB = os.path.join(APP_DIR, "jobs.db")
+UPLOAD_DIR = os.path.join(APP_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "txt"}
@@ -2140,7 +2151,11 @@ def edit_contact(contact_id):
 init_db()
 
 if __name__ == "__main__":
-    # threaded=True so a slow local-AI extraction request (can take tens of
-    # seconds — see gen_job.ai_extract_fields) doesn't freeze the whole app
-    # for other pages/tabs while it's running.
-    app.run(debug=True, port=5050, threaded=True)
+    if getattr(sys, 'frozen', False) or os.environ.get("AUTO_OPEN_BROWSER", "0") == "1":
+        def _open_browser():
+            time.sleep(1.2)
+            webbrowser.open("http://localhost:5050")
+        threading.Thread(target=_open_browser, daemon=True).start()
+
+    is_frozen = getattr(sys, 'frozen', False)
+    app.run(debug=not is_frozen, port=5050, threaded=True)
