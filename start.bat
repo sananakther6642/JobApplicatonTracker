@@ -12,8 +12,18 @@ REM The app works fine on regex extraction alone if any of this is skipped or
 REM fails. See gen_job.py's ai_extract_fields()/ensure_ai_ready().
 set AI_MODEL=qwen2.5:0.5b
 
+REM Try to find ollama.exe in common locations even if not in PATH yet
+set OLLAMA_EXE=
 where ollama >nul 2>nul
-if %errorlevel% neq 0 goto :install_ollama
+if %errorlevel% equ 0 (
+    set OLLAMA_EXE=ollama
+) else (
+    if exist "%LOCALAPPDATA%\Ollama\ollama.exe" set OLLAMA_EXE=%LOCALAPPDATA%\Ollama\ollama.exe
+    if exist "%PROGRAMFILES%\Ollama\ollama.exe" set OLLAMA_EXE=%PROGRAMFILES%\Ollama\ollama.exe
+    if exist "%USERPROFILE%\.ollama\ollama.exe" set OLLAMA_EXE=%USERPROFILE%\.ollama\ollama.exe
+)
+
+if "%OLLAMA_EXE%"=="" goto :install_ollama
 goto :check_server
 
 :install_ollama
@@ -24,7 +34,6 @@ where winget >nul 2>nul
 if %errorlevel% equ 0 (
     echo Installing Ollama via winget...
     winget install Ollama.Ollama --accept-package-agreements --accept-source-agreements
-    if %errorlevel% equ 0 goto :wait_install
 )
 
 REM Fallback: download and run official installer
@@ -38,29 +47,38 @@ if exist "%TEMP%\OllamaSetup.exe" (
     echo [warn] Could not download Ollama installer.
 )
 
-:wait_install
-timeout /t 3 /nobreak >nul
+REM Refresh PATH and look for ollama again
+set OLLAMA_EXE=
 where ollama >nul 2>nul
-if %errorlevel% neq 0 (
+if %errorlevel% equ 0 (
+    set OLLAMA_EXE=ollama
+) else (
+    if exist "%LOCALAPPDATA%\Ollama\ollama.exe" set OLLAMA_EXE=%LOCALAPPDATA%\Ollama\ollama.exe
+    if exist "%PROGRAMFILES%\Ollama\ollama.exe" set OLLAMA_EXE=%PROGRAMFILES%\Ollama\ollama.exe
+    if exist "%USERPROFILE%\.ollama\ollama.exe" set OLLAMA_EXE=%USERPROFILE%\.ollama\ollama.exe
+)
+
+if "%OLLAMA_EXE%"=="" (
     echo [info] Ollama installation could not be completed -- skipping local AI setup (regex-only extraction will be used).
     echo       Install Ollama manually from https://ollama.com to enable AI-assisted extraction.
     goto :start_server
 )
 
 :check_server
+REM Check if Ollama server is already running
 netstat -ano | findstr ":11434" | findstr "LISTENING" >nul 2>nul
 if %errorlevel% equ 0 goto :pull_model
 
 echo Starting Ollama (local AI model server)...
-start /B ollama serve
+start /B "" "%OLLAMA_EXE%" serve
 timeout /t 3 /nobreak >nul
 
 :pull_model
-ollama list 2>nul | findstr /i "%AI_MODEL%" >nul
+"%OLLAMA_EXE%" list 2>nul | findstr /i "%AI_MODEL%" >nul
 if %errorlevel% equ 0 goto :start_server
 
 echo Pulling local AI model %AI_MODEL% (one-time download, ~400MB^)...
-ollama pull %AI_MODEL%
+"%OLLAMA_EXE%" pull %AI_MODEL%
 if %errorlevel% neq 0 (
     echo   [warn] Could not pull %AI_MODEL% -- AI-assisted extraction will be unavailable; regex extraction still works normally.
 )
