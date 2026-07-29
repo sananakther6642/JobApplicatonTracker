@@ -56,3 +56,6 @@ logs/
 # OS
 Thumbs.db
 desktop.ini
+
+# Agent local customization
+.agents/

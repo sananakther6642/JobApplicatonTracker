@@ -1,109 +1,69 @@
 @echo off
-REM Windows auto-setup script for Job Application Tracker (JAT)
-REM Configures local environment, dependency management, and AI services.
+REM Windows auto-setup and launch script for Job Application Tracker (JAT)
+REM Instant non-blocking startup: server and browser launch immediately (<2s).
 
 cd /d "%~dp0"
 
-echo Installing Python dependencies...
-REM Use module invocation to ensure pip matches the active python interpreter context
-python -m pip install -q -r requirements.txt
+echo ===================================================
+echo   Job Application Tracker (JAT) - Startup
+echo ===================================================
 
-REM Define default parameters for local model integration
-set "AI_MODEL=qwen2.5:0.5b"
-set "OLLAMA_EXE="
-
-REM Verify system PATH for existing Ollama executable
-where ollama >nul 2>nul
+REM 1. Locate Python interpreter
+set "PYTHON_CMD="
+where python >nul 2>nul
 if %errorlevel% equ 0 (
-    set "OLLAMA_EXE=ollama"
-    goto :check_server
-)
-
-REM Inspect default installation paths if executable is omitted from PATH
-if exist "%LOCALAPPDATA%\Ollama\ollama.exe" set "OLLAMA_EXE=%LOCALAPPDATA%\Ollama\ollama.exe"
-if exist "%PROGRAMFILES%\Ollama\ollama.exe" set "OLLAMA_EXE=%PROGRAMFILES%\Ollama\ollama.exe"
-if exist "%USERPROFILE%\.ollama\ollama.exe" set "OLLAMA_EXE=%USERPROFILE%\.ollama\ollama.exe"
-
-if defined OLLAMA_EXE goto :check_server
-
-REM ---- Install Ollama ----
-echo Ollama executable not found. Initiating automated setup...
-
-where winget >nul 2>nul
-if %errorlevel% equ 0 (
-    echo Installing Ollama via Windows Package Manager (winget)...
-    winget install Ollama.Ollama --accept-package-agreements --accept-source-agreements
-    echo Waiting for system environment registration...
-    timeout /t 5 /nobreak >nul
-)
-
-REM Re-evaluating executable availability following package installation
-where ollama >nul 2>nul
-if %errorlevel% equ 0 (
-    set "OLLAMA_EXE=ollama"
+    set "PYTHON_CMD=python"
 ) else (
-    if exist "%LOCALAPPDATA%\Ollama\ollama.exe" set "OLLAMA_EXE=%LOCALAPPDATA%\Ollama\ollama.exe"
-    if exist "%PROGRAMFILES%\Ollama\ollama.exe" set "OLLAMA_EXE=%PROGRAMFILES%\Ollama\ollama.exe"
-    if exist "%USERPROFILE%\.ollama\ollama.exe" set "OLLAMA_EXE=%USERPROFILE%\.ollama\ollama.exe"
+    where py >nul 2>nul
+    if %errorlevel% equ 0 (
+        set "PYTHON_CMD=py -3"
+    ) else (
+        where python3 >nul 2>nul
+        if %errorlevel% equ 0 (
+            set "PYTHON_CMD=python3"
+        )
+    )
 )
 
-if defined OLLAMA_EXE goto :check_server
+if not defined PYTHON_CMD (
+    echo [ERROR] Python is not installed or not in system PATH.
+    echo Please install Python 3.8+ from https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
 
-REM Fallback mechanism for manual binary acquisition
-echo Downloading Ollama setup package...
-powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile '%TEMP%\OllamaSetup.exe'" >nul 2>&1
-
-if exist "%TEMP%\OllamaSetup.exe" (
-    echo Launching installer. Completing setup enables local model features.
-    start "" "%TEMP%\OllamaSetup.exe"
-    echo Pausing execution while installer initializes...
-    timeout /t 10 /nobreak >nul
+REM 2. Setup virtual environment (.venv)
+if not exist ".venv\Scripts\python.exe" (
+    echo Creating Python virtual environment...
+    %PYTHON_CMD% -m venv .venv >nul 2>&1
+    if %errorlevel% neq 0 (
+        set "VENV_PYTHON=%PYTHON_CMD%"
+    ) else (
+        set "VENV_PYTHON=.venv\Scripts\python.exe"
+    )
 ) else (
-    echo [warn] Download failed. Falling back to pattern-based regex extraction.
+    set "VENV_PYTHON=.venv\Scripts\python.exe"
 )
 
-echo [info] Continuing startup with deterministic regex extraction engine.
-goto :start_server
-
-REM ---- Verify Server Status ----
-:check_server
-netstat -ano | findstr ":11434" | findstr "LISTENING" >nul 2>nul
-if %errorlevel% equ 0 goto :pull_model
-
-echo Spawning Ollama model service in background...
-start /B "" "%OLLAMA_EXE%" serve
-
-REM Polling loop to wait until port 11434 active state is confirmed (up to 10 seconds)
-set /a RETRIES=0
-:poll_server
-timeout /t 2 /nobreak >nul
-netstat -ano | findstr ":11434" | findstr "LISTENING" >nul 2>nul
-if %errorlevel% equ 0 goto :pull_model
-set /a RETRIES+=1
-if %RETRIES% lss 5 goto :poll_server
-
-echo [warn] Server initialization timed out. Proceeding without model inference.
-goto :start_server
-
-REM ---- Model Retrieval ----
-:pull_model
-"%OLLAMA_EXE%" list 2>nul | findstr /i "%AI_MODEL%" >nul
-if %errorlevel% equ 0 goto :start_server
-
-echo Downloading language model %AI_MODEL%...
-"%OLLAMA_EXE%" pull %AI_MODEL%
-if %errorlevel% neq 0 (
-    echo [warn] Model pull failed. Regex fallback remains operational.
+if exist ".venv\Scripts\activate.bat" (
+    call .venv\Scripts\activate.bat >nul 2>&1
 )
 
-REM ---- Web Server Execution ----
-:start_server
-echo Terminating any active processes on port 5050...
+REM 3. Fast dependency check
+echo Ensuring dependencies are up to date...
+"%VENV_PYTHON%" -m pip install -q --disable-pip-version-check -r requirements.txt >nul 2>&1
+
+set "AUTO_OPEN_BROWSER=1"
+
+REM 4. Launch optional local AI (Ollama) service in background WITHOUT blocking startup
+start /B cmd /c "(where ollama >nul 2>nul && ollama serve >nul 2>&1) || (if exist \"%LOCALAPPDATA%\Ollama\ollama.exe\" \"%LOCALAPPDATA%\Ollama\ollama.exe\" serve >nul 2>&1)" >nul 2>&1
+
+REM 5. Clear port 5050 and launch web application immediately
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5050" ^| findstr "LISTENING"') do (
     taskkill /PID %%a /F >nul 2>&1
 )
-timeout /t 1 /nobreak >nul
 
-echo Launching JAT application server on http://localhost:5050 ...
-python app.py
+echo Starting JAT application on http://localhost:5050 ...
+start http://localhost:5050
+"%VENV_PYTHON%" app.py
 pause

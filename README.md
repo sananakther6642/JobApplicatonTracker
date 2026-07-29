@@ -61,10 +61,11 @@ open http://localhost:5050
 start http://localhost:5050
 ```
 
-### Windows notes
+### Windows Usage & Auto-Setup
 
-- `start.sh` / `start.bat` are auto-setup scripts — run them to install dependencies and start the server. `start.sh` is for Mac/Linux; `start.bat` is for Windows.
-- `start.bat` attempts to install Ollama automatically (via winget or the official installer). If automatic installation fails, install Ollama manually from https://ollama.com.
+- **Double-click `start.bat`**: Auto-creates `.venv`, installs Python requirements, sets up Ollama & model automatically (if missing), launches the server on port 5050, and opens `http://localhost:5050` in your default browser.
+- **Double-click `launch_jat.vbs`**: Runs `start.bat` silently in the background without leaving an active CMD window open.
+- **Getting Updates**: Simply run `git pull` — every time you pull the latest code, `start.bat` ensures any updated dependencies are installed automatically on launch.
 
 ---
 
