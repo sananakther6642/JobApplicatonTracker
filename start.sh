@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 cd "$(dirname "$0")"
 pip3 install -q -r requirements.txt
 
@@ -10,11 +11,15 @@ AI_MODEL="qwen2.5:0.5b"
 if ! command -v ollama >/dev/null 2>&1; then
     if command -v brew >/dev/null 2>&1; then
         echo "Ollama not found — installing via Homebrew (one-time, free, fully offline afterwards)..."
-        brew install ollama \
-            || echo "  [warn] 'brew install ollama' failed — AI-assisted extraction will be unavailable; regex extraction still works normally."
-    else
-        echo "[info] Ollama not found and Homebrew isn't available — skipping local AI setup (regex-only extraction will be used)."
-        echo "       Install Homebrew (https://brew.sh) or Ollama (https://ollama.com) manually to enable AI-assisted extraction."
+        brew install ollama || echo "  [warn] 'brew install ollama' failed — falling back to official install script."
+    fi
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo "Trying Ollama official install script..."
+        curl -fsSL https://ollama.com/install.sh | sh || echo "  [warn] Official install script failed — AI-assisted extraction will be unavailable."
+    fi
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo "[info] Ollama installation could not be completed — skipping local AI setup (regex-only extraction will be used)."
+        echo "       Install Ollama manually from https://ollama.com to enable AI-assisted extraction."
     fi
 fi
 
@@ -27,8 +32,7 @@ if command -v ollama >/dev/null 2>&1; then
     fi
     if ! ollama list 2>/dev/null | grep -q "^${AI_MODEL}"; then
         echo "Pulling local AI model ${AI_MODEL} (one-time download, ~400MB)..."
-        ollama pull "$AI_MODEL" \
-            || echo "  [warn] Could not pull ${AI_MODEL} — AI-assisted extraction will be unavailable; regex extraction still works normally."
+        ollama pull "$AI_MODEL" || echo "  [warn] Could not pull ${AI_MODEL} — AI-assisted extraction will be unavailable; regex extraction still works normally."
     fi
 fi
 
