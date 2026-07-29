@@ -275,6 +275,6 @@ class TestNewFeatureUpgrades:
         resp = client.get("/generate?jd_text=Senior+Dev+at+Google&autostart=1")
         assert resp.status_code == 200
         assert b"name=\"autostart\" value=\"1\"" in resp.data
-        assert b"Bookmarklet Tool" in resp.data
+        assert b"1-Click Quick Track" in resp.data
 
 

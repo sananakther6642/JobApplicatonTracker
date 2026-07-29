@@ -1,6 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Stats — Job Tracker{% endblock %}
 {% block content %}
+<style>
+.stat-bar {
+  height: 6px;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.stat-bar-month {
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  width: 100%;
+}
+.stat-bar-rejection {
+  background: #ef4444;
+  height: 6px;
+  border-radius: 4px;
+}
+</style>
 
 <div class="page-header">
   <h1>Stats</h1>
@@ -56,9 +74,9 @@
         <span>{{ status_labels.get(row.status, row.status) }}</span>
         <span style="color:var(--text2);font-weight:600">{{ row.cnt }}</span>
       </div>
-      <div style="background:var(--bg2);border-radius:99px;height:6px;overflow:hidden">
-        <div style="background:{{ status_colors.get(row.status,'var(--accent)') }};height:6px;width:{{ pct }}%;border-radius:99px;transition:width 0.4s ease"></div>
-      </div>
+        <div style="background:var(--bg2);border-radius:99px;height:6px;overflow:hidden">
+          <div class="stat-bar" style="--bar-color:{{ status_colors.get(row.status,'var(--accent)') }};--bar-w:{{ pct }}%;background:var(--bar-color);width:var(--bar-w)"></div>
+        </div>
     </div>
     {% endfor %}
   </div>
@@ -74,7 +92,7 @@
         {% set h = ((row.cnt / max_m) * 68) | int if max_m > 0 else 0 %}
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
           <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
-          <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
+          <div class="stat-bar-month" style="--bar-h:{{ h }}px;height:var(--bar-h)"></div>
           <span style="font-size:10px;color:var(--text3)">{{ mn.get(row.month[5:], row.month[5:]) }}</span>
         </div>
         {% endfor %}
@@ -108,7 +126,7 @@
     {% set h = ((row.cnt / max_dow) * 68) | int if max_dow > 0 else 0 %}
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
       <span style="font-size:11px;color:var(--text2);font-weight:600">{{ row.cnt }}</span>
-      <div style="background:var(--accent);border-radius:3px 3px 0 0;width:100%;min-height:4px;height:{{ h }}px"></div>
+      <div class="stat-bar-month" style="--bar-h:{{ h }}px;height:var(--bar-h)"></div>
       <span style="font-size:11px;color:var(--text3)">{{ row.dow }}</span>
     </div>
     {% endfor %}
@@ -129,7 +147,7 @@
       <span style="color:var(--text2);font-weight:600">{{ row.cnt }} <span style="font-weight:400;color:var(--text3)">({{ pct }}%)</span></span>
     </div>
     <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-      <div style="background:#ef4444;height:6px;width:{{ pct }}%;border-radius:4px"></div>
+      <div class="stat-bar-rejection" style="--bar-w:{{ pct }}%;width:var(--bar-w)"></div>
     </div>
   </div>
   {% endfor %}

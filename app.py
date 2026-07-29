@@ -510,6 +510,7 @@ def dashboard():
 
         # Weekly & Monthly goals calculation
         monday = date.today() - timedelta(days=date.today().weekday())
+        sunday = monday + timedelta(days=6)
         this_month_start = date.today().replace(day=1)
         
         job_dates = conn.execute(
@@ -536,7 +537,7 @@ def dashboard():
                     except Exception:
                         pass
             if d:
-                if monday <= d <= date.today():
+                if monday <= d <= sunday:
                     this_week_count += 1
                 if d >= this_month_start:
                     this_month_count += 1
