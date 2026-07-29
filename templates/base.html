@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -422,42 +422,76 @@
   /* ── Mobile ── */
   @media (max-width: 768px) {
     .container { padding: 16px; }
-    nav { padding: 0 16px; gap: 2px; height: auto; min-height: 58px; }
-    nav a.nav-link { padding: 5px 8px; font-size: 12px; }
+    nav { padding: 0 14px; gap: 2px; height: auto; min-height: 58px; flex-wrap: nowrap; }
+    .nav-main-links { display: none; flex-direction: column; gap: 4px;
+      position: absolute; top: 58px; left: 0; right: 0;
+      background: var(--nav-bg); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); padding: 12px 16px;
+      z-index: 99;
+    }
+    .nav-main-links.open { display: flex; }
+    .nav-end { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .hamburger {
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 5px; background: none; border: none; cursor: pointer;
+      padding: 6px; border-radius: 8px; color: var(--text2);
+    }
+    .hamburger span { display: block; width: 20px; height: 2px; background: currentColor; border-radius: 2px; transition: all 0.2s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     .form-row, .form-row.cols3 { grid-template-columns: 1fr; }
     .kpi-grid { grid-template-columns: repeat(3, 1fr); }
     .detail-grid { grid-template-columns: 1fr; }
   }
+  @media (min-width: 769px) {
+    .hamburger { display: none; }
+    .nav-main-links { display: contents; }
+    .nav-end { display: contents; }
+  }
   @media (max-width: 480px) {
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .job-card-row { flex-direction: column; align-items: flex-start !important; gap: 10px !important; }
+    .dashboard-grid { grid-template-columns: 1fr !important; }
   }
 </style>
 </head>
 <body>
 <nav>
-  <span class="brand" style="flex-direction:column;align-items:flex-start;gap:2px;line-height:1;margin-right:20px">
+  <span class="brand" style="flex-direction:column;align-items:flex-start;gap:2px;line-height:1;margin-right:16px;flex-shrink:0">
     <span style="font-size:22px;font-weight:900;letter-spacing:-1.5px;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">JAT</span>
     <span style="font-size:8px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px">Job Tracker</span>
   </span>
-  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" title="Dashboard (D)">Dashboard</a>
-  <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" title="All Jobs (J)">All Jobs</a>
-  <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}" title="Stats (S)">Stats</a>
-  <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
-  <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
-  <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Email Templates</a>
-  <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
-  <span class="spacer"></span>
-  <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
-  <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
-  <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
-  <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
-  <a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
-     title="Generate from JD (G)"
-     style="margin-right:6px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none">
-    ✨ Generate
-  </a>
-  <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)" style="margin-right:10px">+ Add Job</a>
+  <!-- Hamburger (mobile only) -->
+  <button class="hamburger" id="hamburger" aria-label="Toggle menu" onclick="toggleMobileNav()">
+    <span></span><span></span><span></span>
+  </button>
+  <!-- Main nav links -->
+  <div class="nav-main-links" id="nav-main-links">
+    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" title="Dashboard (D)">Dashboard</a>
+    <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" title="All Jobs (J)">All Jobs</a>
+    <a href="{{ url_for('kanban_view') }}" class="nav-link {% if request.endpoint == 'kanban_view' %}active{% endif %}" title="Kanban Board">Kanban</a>
+    <a href="{{ url_for('calendar_view') }}" class="nav-link {% if request.endpoint == 'calendar_view' %}active{% endif %}" title="Interview Calendar">Calendar</a>
+    <a href="{{ url_for('stats') }}" class="nav-link {% if request.endpoint == 'stats' %}active{% endif %}" title="Stats (S)">Stats</a>
+    <a href="{{ url_for('salary') }}" class="nav-link {% if request.endpoint == 'salary' %}active{% endif %}">Salary</a>
+    <a href="{{ url_for('offers') }}" class="nav-link {% if request.endpoint == 'offers' %}active{% endif %}">Offers</a>
+    <a href="{{ url_for('email_templates') }}" class="nav-link {% if request.endpoint == 'email_templates' %}active{% endif %}">Emails</a>
+    <a href="{{ url_for('contacts') }}" class="nav-link {% if request.endpoint in ['contacts','edit_contact'] %}active{% endif %}">Contacts</a>
+  </div>
+  <!-- Right-side nav actions -->
+  <div class="nav-end">
+    <span class="spacer"></span>
+    <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
+    <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
+    <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:4px">Export</a>
+    <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+    <a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
+       title="Generate from JD (G)"
+       style="margin-right:4px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none">
+      ✨ Generate
+    </a>
+    <a href="{{ url_for('add_job') }}" class="btn btn-primary" title="Add Job (N)" style="margin-right:6px">+ Add Job</a>
+  </div>
 </nav>
 
 <!-- Generate tip banner (first visit, not on generate page) -->
@@ -497,10 +531,13 @@ function toggleDark() {
   document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
 }
 (function() {
-  const saved = localStorage.getItem('theme') || 'light';
-  document.documentElement.setAttribute('data-theme', saved);
+  // Respect explicit user preference; fall back to OS preference
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
   const btn = document.getElementById('darkToggle');
-  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
 })();
 
 // Toast system
@@ -685,12 +722,29 @@ function copyBookmarkletScript() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeQuickTrackModal();
+  if (e.key === 'Escape') {
+    closeQuickTrackModal();
+    closeMobileNav();
+  }
 });
 document.addEventListener('click', function(e) {
   const modal = document.getElementById('quickTrackModal');
   if (e.target === modal) closeQuickTrackModal();
 });
+
+function toggleMobileNav() {
+  const links = document.getElementById('nav-main-links');
+  const btn = document.getElementById('hamburger');
+  if (!links) return;
+  const open = links.classList.toggle('open');
+  if (btn) btn.classList.toggle('open', open);
+}
+function closeMobileNav() {
+  const links = document.getElementById('nav-main-links');
+  const btn = document.getElementById('hamburger');
+  if (links) links.classList.remove('open');
+  if (btn) btn.classList.remove('open');
+}
 </script>
 
 <!-- ── Quick Track Modal Popup ── -->

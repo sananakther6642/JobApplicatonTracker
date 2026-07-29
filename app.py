@@ -263,6 +263,8 @@ def init_db():
             ("interest_score",     "INTEGER DEFAULT 0"),
             ("next_action",        "TEXT DEFAULT ''"),
             ("rejection_reason",   "TEXT DEFAULT ''"),
+            ("archived",           "INTEGER DEFAULT 0"),
+            ("quick_note",         "TEXT DEFAULT ''"),
         ]
         for col, typedef in new_cols:
             try:
@@ -286,6 +288,9 @@ STATUSES = [
     "technical_interview", "final_interview",
     "offer", "rejected", "withdrawn", "ghosted",
 ]
+
+# Statuses visible in the active pipeline (excludes archived)
+ACTIVE_STATUSES = [s for s in STATUSES if s != "archived"]
 
 STATUS_LABELS = {
     "applied": "Applied",
@@ -327,6 +332,46 @@ REJECTION_REASONS = [
     "No response", "Salary mismatch", "Skills gap",
     "Overqualified", "Position filled", "Culture fit", "Other"
 ]
+
+
+def compute_priority(job, today_d=None):
+    """Compute a 0-100 priority score for a job card.
+    Higher = needs more attention. Factors:
+    - Interest score (higher interest → higher priority)
+    - Days since applied (older without response → higher priority)
+    - Overdue follow-up
+    - Active stage (interview stages get a boost)
+    """
+    if today_d is None:
+        today_d = date.today()
+    score = 0
+    # Interest score contribution (max 30 pts)
+    interest = int(job["interest_score"] or 0)
+    score += interest * 6  # 0..30
+    # Stage boost (interview stages)
+    stage_boost = {
+        "phone_interview": 20, "technical_interview": 25,
+        "final_interview": 30, "screening": 10,
+    }
+    score += stage_boost.get(job["status"], 0)
+    # Days since applied (up to 30 pts for 30+ days without response)
+    if job["applied_date"]:
+        try:
+            applied = date.fromisoformat(job["applied_date"][:10])
+            days_old = (today_d - applied).days
+            score += min(days_old, 30)
+        except Exception:
+            pass
+    # Overdue follow-up
+    try:
+        fu = (job["follow_up_date"] or "").strip()
+        if fu:
+            fu_d = date.fromisoformat(fu)
+            if fu_d <= today_d:
+                score += 20
+    except Exception:
+        pass
+    return min(score, 100)
 
 
 def slugify(text):
@@ -563,6 +608,17 @@ def dashboard():
         (total - counts.get("applied", 0) - counts.get("ghosted", 0)) / total * 100, 1
     ) if total > 0 else 0
 
+    # Priority score for kanban cards
+    today_d = date.today()
+    kanban_priority = {}
+    for s in kanban_statuses:
+        for job in kanban[s]:
+            kanban_priority[job["id"]] = compute_priority(job, today_d)
+
+    # Follow-up due today (explicit follow_up_date <= today)
+    followup_due = [j for j in followups if (j.get("follow_up_date") or "").strip() and
+                    (j.get("follow_up_date") or "").strip() <= today]
+
     return render_template(
         "dashboard.html",
         total=total,
@@ -571,6 +627,7 @@ def dashboard():
         kanban_statuses=kanban_statuses,
         activity=activity,
         followups=followups,
+        followup_due=followup_due,
         deadlines=deadlines,
         monthly=monthly,
         funnel=funnel,
@@ -585,6 +642,7 @@ def dashboard():
         weekly_goal=weekly_goal,
         monthly_goal=monthly_goal,
         this_month_count=this_month_count,
+        kanban_priority=kanban_priority,
     )
 
 
@@ -630,6 +688,7 @@ def index():
     order = request.args.get("order", "desc")
     tag_filter = request.args.get("tag", "")
     starred_only = request.args.get("starred", "") == "1"
+    show_archived = request.args.get("archived", "") == "1"
     try:
         page = max(1, int(request.args.get("page", 1) or 1))
     except (ValueError, TypeError):
@@ -642,6 +701,12 @@ def index():
 
     if tag_filter:
         join_clause = " JOIN tags ON tags.job_id = jobs.id"
+
+    # Archived filter: show archived OR hide archived based on param
+    if show_archived:
+        where_parts.append("jobs.archived = 1")
+    else:
+        where_parts.append("(jobs.archived = 0 OR jobs.archived IS NULL)")
 
     if status_filter:
         where_parts.append("jobs.status = ?")
@@ -677,11 +742,16 @@ def index():
         counts = {}
         for s in STATUSES:
             counts[s] = conn.execute(
-                "SELECT COUNT(*) FROM jobs WHERE status=?", (s,)
+                "SELECT COUNT(*) FROM jobs WHERE status=? AND (archived=0 OR archived IS NULL)", (s,)
             ).fetchone()[0]
-        counts["total"] = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        counts["total"] = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE (archived=0 OR archived IS NULL)"
+        ).fetchone()[0]
         counts["starred"] = conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE starred=1"
+            "SELECT COUNT(*) FROM jobs WHERE starred=1 AND (archived=0 OR archived IS NULL)"
+        ).fetchone()[0]
+        counts["archived"] = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE archived=1"
         ).fetchone()[0]
 
         job_ids = [j["id"] for j in jobs]
@@ -691,9 +761,10 @@ def index():
             "SELECT DISTINCT name FROM tags ORDER BY name"
         ).fetchall()
 
-    # Compute days ago for each job
+    # Compute days ago + priority score for each job
     today = date.today()
     days_ago = {}
+    priority_scores = {}
     for job in jobs:
         if job['applied_date']:
             try:
@@ -701,6 +772,7 @@ def index():
                 days_ago[job['id']] = (today - d).days
             except Exception:
                 pass
+        priority_scores[job['id']] = compute_priority(job, today)
 
     return render_template(
         "index.html",
@@ -715,6 +787,7 @@ def index():
         current_order=order,
         current_tag=tag_filter,
         starred_only=starred_only,
+        show_archived=show_archived,
         tags_by_job=tags_by_job,
         all_tags=all_tags,
         days_ago=days_ago,
@@ -723,6 +796,7 @@ def index():
         per_page=per_page,
         total_pages=total_pages,
         total_count=total_count,
+        priority_scores=priority_scores,
     )
 
 
@@ -1259,6 +1333,58 @@ def api_add_timeline():
 
 
 # ---------------------------------------------------------------------------
+# Archive / Unarchive job
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/archive", methods=["POST"])
+def archive_job(job_id):
+    with get_db() as conn:
+        job = conn.execute("SELECT archived FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        new_val = 0 if job["archived"] else 1
+        conn.execute("UPDATE jobs SET archived=? WHERE id=?", (new_val, job_id))
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax"):
+        return jsonify({"ok": True, "archived": bool(new_val)})
+    return redirect(request.referrer or url_for("index"))
+
+
+# ---------------------------------------------------------------------------
+# Quick Note (inline AJAX save)
+# ---------------------------------------------------------------------------
+
+@app.route("/job/<int:job_id>/quick-note", methods=["POST"])
+def quick_note(job_id):
+    note = (request.form.get("quick_note") or request.get_json(force=True, silent=True) or {}).get("quick_note", "") \
+        if request.content_type and "json" in request.content_type \
+        else request.form.get("quick_note", "")
+    with get_db() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return jsonify({"ok": False}), 404
+        conn.execute("UPDATE jobs SET quick_note=? WHERE id=?", (note, job_id))
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Duplicate check API
+# ---------------------------------------------------------------------------
+
+@app.route("/api/check-duplicate")
+def check_duplicate():
+    company = (request.args.get("company") or "").strip()
+    role = (request.args.get("role") or "").strip()
+    if not company or not role:
+        return jsonify({"duplicate": False})
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id FROM jobs WHERE LOWER(company)=LOWER(?) AND LOWER(role)=LOWER(?)",
+            (company, role)
+        ).fetchone()
+    return jsonify({"duplicate": row is not None, "id": row["id"] if row else None})
+
+
+# ---------------------------------------------------------------------------
 # Delete job
 # ---------------------------------------------------------------------------
 
@@ -1567,6 +1693,71 @@ def checklist(job_id):
 
 
 # ---------------------------------------------------------------------------
+# Interview Calendar
+# ---------------------------------------------------------------------------
+
+@app.route("/calendar")
+def calendar_view():
+    with get_db() as conn:
+        rounds = conn.execute("""
+            SELECT ir.*, j.company, j.role, j.id as job_id, j.status
+            FROM interview_rounds ir
+            JOIN jobs j ON ir.job_id = j.id
+            WHERE ir.interview_date != '' AND ir.interview_date IS NOT NULL
+            ORDER BY ir.interview_date ASC
+        """).fetchall()
+    # Group by date
+    by_date = {}
+    for r in rounds:
+        key = r["interview_date"][:10] if r["interview_date"] else ""
+        if key:
+            by_date.setdefault(key, []).append(r)
+    today = date.today()
+    return render_template(
+        "calendar.html",
+        by_date=by_date,
+        today=today.isoformat(),
+        status_labels=STATUS_LABELS,
+        status_colors=STATUS_COLORS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Kanban Board
+# ---------------------------------------------------------------------------
+
+@app.route("/kanban")
+def kanban_view():
+    kanban_statuses = ["applied", "screening", "phone_interview",
+                       "technical_interview", "final_interview", "offer"]
+    with get_db() as conn:
+        kanban = {}
+        for s in kanban_statuses:
+            jobs = conn.execute(
+                "SELECT * FROM jobs WHERE status=? AND (archived=0 OR archived IS NULL) ORDER BY applied_date DESC",
+                (s,)
+            ).fetchall()
+            kanban[s] = jobs
+        job_ids_all = [j["id"] for jobs_list in kanban.values() for j in jobs_list]
+        tags_by_job = get_tags_for_jobs(conn, job_ids_all)
+    today_d = date.today()
+    priority = {}
+    for jobs_list in kanban.values():
+        for job in jobs_list:
+            priority[job["id"]] = compute_priority(job, today_d)
+    return render_template(
+        "kanban.html",
+        kanban=kanban,
+        kanban_statuses=kanban_statuses,
+        status_labels=STATUS_LABELS,
+        status_colors=STATUS_COLORS,
+        tags_by_job=tags_by_job,
+        priority=priority,
+        statuses=STATUSES,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Bulk status update
 # ---------------------------------------------------------------------------
 
@@ -1837,10 +2028,29 @@ def salary():
         for job in jobs:
             by_status.setdefault(job["status"], []).append(job)
 
+        # Group by role (top 10 roles by count with salary info)
+        by_role_raw = conn.execute("""
+            SELECT role, COUNT(*) as cnt, salary_range
+            FROM jobs WHERE salary_range != '' AND salary_range IS NOT NULL
+            GROUP BY role ORDER BY cnt DESC LIMIT 10
+        """).fetchall()
+        by_role = [dict(r) for r in by_role_raw]
+
+        # Group by location (top 10)
+        by_location_raw = conn.execute("""
+            SELECT location, COUNT(*) as cnt
+            FROM jobs WHERE salary_range != '' AND salary_range IS NOT NULL
+            AND location != '' AND location IS NOT NULL
+            GROUP BY location ORDER BY cnt DESC LIMIT 10
+        """).fetchall()
+        by_location = [dict(r) for r in by_location_raw]
+
     return render_template(
         "salary.html",
         jobs=jobs,
         by_status=by_status,
+        by_role=by_role,
+        by_location=by_location,
         status_labels=STATUS_LABELS,
         status_colors=STATUS_COLORS,
         statuses=STATUSES,
@@ -2112,6 +2322,54 @@ def stats():
             ORDER BY cnt DESC
         """).fetchall()
 
+        # Weekly velocity: last 12 weeks (Mon-Sun buckets)
+        weekly_velocity_raw = conn.execute("""
+            SELECT
+                strftime('%Y-W%W', applied_date) as week_key,
+                date(applied_date, 'weekday 0', '-6 days') as week_start,
+                COUNT(*) as cnt
+            FROM jobs WHERE applied_date != ''
+            GROUP BY week_key
+            ORDER BY week_key DESC
+            LIMIT 12
+        """).fetchall()
+        weekly_velocity = list(reversed([
+            {"week": r["week_start"] or r["week_key"], "cnt": r["cnt"]}
+            for r in weekly_velocity_raw
+        ]))
+
+        # Source funnel: per source — applied count, interview count, offer count
+        source_funnel_raw = conn.execute("""
+            SELECT source,
+                   COUNT(*) as applied_cnt,
+                   SUM(CASE WHEN status IN ('phone_interview','technical_interview','final_interview','offer') THEN 1 ELSE 0 END) as interview_cnt,
+                   SUM(CASE WHEN status = 'offer' THEN 1 ELSE 0 END) as offer_cnt
+            FROM jobs WHERE source != '' AND source IS NOT NULL
+            GROUP BY source
+            ORDER BY applied_cnt DESC
+            LIMIT 10
+        """).fetchall()
+        source_funnel = [dict(r) for r in source_funnel_raw]
+
+        # Response time per source
+        resp_per_source_raw = conn.execute("""
+            SELECT j.source,
+                   AVG(julianday(t.event_date) - julianday(j.applied_date)) as avg_days,
+                   COUNT(DISTINCT j.id) as cnt
+            FROM jobs j
+            JOIN timeline t ON t.job_id = j.id
+            WHERE j.source != ''
+            AND t.event NOT IN ('Applied', 'Initial application')
+            AND j.applied_date != ''
+            AND t.event_date > j.applied_date
+            GROUP BY j.source
+            ORDER BY avg_days ASC
+        """).fetchall()
+        resp_per_source = [
+            {"source": r["source"], "avg_days": round(r["avg_days"], 1) if r["avg_days"] else None, "cnt": r["cnt"]}
+            for r in resp_per_source_raw
+        ]
+
     counts = {row["status"]: row["cnt"] for row in by_status}
     conversion = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
 
@@ -2148,6 +2406,9 @@ def stats():
         reached_interview=reached_interview,
         dow_stats=dow_stats,
         rejection_breakdown=rejection_breakdown,
+        weekly_velocity=weekly_velocity,
+        source_funnel=source_funnel,
+        resp_per_source=resp_per_source,
     )
 
 

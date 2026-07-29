@@ -22,15 +22,20 @@
     <div class="card" style="padding:24px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Job Info</div>
 
-      <div class="form-row" style="margin-bottom:18px">
+      <div class="form-row" style="margin-bottom:6px">
         <div class="form-group" style="margin:0">
           <label class="form-label">Company *</label>
-          <input class="form-input" type="text" name="company" required placeholder="e.g. Google">
+          <input class="form-input" type="text" name="company" id="field-company" required placeholder="e.g. Google">
         </div>
         <div class="form-group" style="margin:0">
           <label class="form-label">Role *</label>
-          <input class="form-input" type="text" name="role" required placeholder="e.g. Senior SWE">
+          <input class="form-input" type="text" name="role" id="field-role" required placeholder="e.g. Senior SWE">
         </div>
+      </div>
+      <!-- Duplicate warning -->
+      <div id="dup-warning" style="display:none;background:var(--warn-light);border:1px solid var(--warn);border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:var(--warn);align-items:center;gap:8px">
+        ⚠️ <span id="dup-msg"></span>
+        <a id="dup-link" href="#" style="color:var(--warn);font-weight:700;margin-left:4px">View existing →</a>
       </div>
 
       <div class="form-row cols3" style="margin-bottom:18px">
@@ -266,5 +271,30 @@ document.getElementById('add-job-form').addEventListener('submit', () => {
   localStorage.removeItem(DRAFT_KEY);
   formDirty = false;
 });
+
+// Live duplicate check
+function checkDuplicate() {
+  const company = document.getElementById('field-company').value.trim();
+  const role = document.getElementById('field-role').value.trim();
+  if (!company || !role) {
+    document.getElementById('dup-warning').style.display = 'none';
+    return;
+  }
+  fetch(`/api/check-duplicate?company=${encodeURIComponent(company)}&role=${encodeURIComponent(role)}`)
+    .then(r => r.json())
+    .then(data => {
+      const warn = document.getElementById('dup-warning');
+      if (data.duplicate) {
+        document.getElementById('dup-msg').textContent =
+          `A job at "${company}" for "${role}" already exists.`;
+        document.getElementById('dup-link').href = `/job/${data.id}`;
+        warn.style.display = 'flex';
+      } else {
+        warn.style.display = 'none';
+      }
+    }).catch(() => {});
+}
+document.getElementById('field-company').addEventListener('blur', checkDuplicate);
+document.getElementById('field-role').addEventListener('blur', checkDuplicate);
 </script>
 {% endblock %}

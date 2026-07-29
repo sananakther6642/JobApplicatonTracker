@@ -58,6 +58,10 @@
        style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);text-decoration:none;color:var(--warn);{% if starred_only %}background:var(--warn-light);border-color:var(--warn);{% endif %}">
       ★ Starred ({{ counts.get('starred',0) }})
     </a>
+    <a href="{{ url_for('index', archived='1', sort=current_sort, order=current_order) }}"
+       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);text-decoration:none;color:var(--text2);{% if show_archived %}background:var(--bg2);border-color:var(--text3);{% endif %}">
+      📦 Archived ({{ counts.get('archived',0) }})
+    </a>
     {% if all_tags %}
     <span style="color:var(--text3);font-size:11px;margin-left:4px">Tags:</span>
     {% for tag in all_tags %}
@@ -119,9 +123,18 @@ const STATUS_CLASS_MAP = {
         {% endif %}
 
         <!-- Actions -->
-<div style="display:flex;gap:6px;flex-shrink:0;margin-left:4px">
-           <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">View</a>
-           <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">Edit</a>
+<div style="display:flex;gap:6px;flex-shrink:0;margin-left:4px" onclick="event.stopPropagation()">
+          {% set pscore = priority_scores.get(job.id, 0) %}
+          {% if pscore >= 60 %}
+          <span title="Priority: High" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:#fef2f2;color:#ef4444;border:1px solid #fecaca">🔥 High</span>
+          {% elif pscore >= 35 %}
+          <span title="Priority: Medium" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--warn-light);color:var(--warn);border:1px solid #fde68a">⚡ Med</span>
+          {% endif %}
+           <a href="{{ url_for('job_detail', job_id=job.id) }}" class="btn btn-secondary btn-sm">View</a>
+           <a href="{{ url_for('edit_job', job_id=job.id) }}" class="btn btn-secondary btn-sm">Edit</a>
+           <button type="button" class="btn btn-secondary btn-sm" title="{% if job.archived %}Unarchive{% else %}Archive{% endif %}"
+                   onclick="archiveJob({{ job.id }}, this); event.stopPropagation()"
+                   style="padding:5px 8px">{% if job.archived %}📤{% else %}📦{% endif %}</button>
            <button type="button" class="btn btn-danger btn-sm" title="Delete" style="padding:5px 8px"
                    data-company="{{ job.company | e }}"
                    onclick="deleteJob({{ job.id }}, this.dataset.company); event.stopPropagation()">🗑</button>
@@ -156,6 +169,19 @@ const STATUS_CLASS_MAP = {
           {% if job.source %}<div style="font-size:11px;color:var(--text3)">{{ job.source }}</div>{% endif %}
           {% if job.offer_deadline %}<div style="font-size:11px;color:var(--danger);font-weight:700">⏳ {{ job.offer_deadline }}</div>{% endif %}
         </div>
+      </div>
+
+      <!-- Quick Note -->
+      <div style="padding-left:51px;margin-top:8px" onclick="event.stopPropagation()">
+        <textarea
+          class="form-input"
+          rows="1"
+          placeholder="Quick note…"
+          style="font-size:12px;padding:5px 9px;resize:none;min-height:32px;border-radius:7px;color:var(--text2);transition:min-height 0.15s"
+          data-job-id="{{ job.id }}"
+          onfocus="this.style.minHeight='60px'"
+          onblur="this.style.minHeight='32px'; saveQuickNote(this)"
+          onclick="event.stopPropagation()">{{ job.quick_note or '' }}</textarea>
       </div>
 
     </div>
@@ -369,6 +395,47 @@ function bulkDelete() {
   undoBtn.onclick = undoBulk;
   let deleteTimer = setTimeout(doDelete, 1200);
   toast._timer = deleteTimer;
+}
+
+
+// Quick note AJAX save
+function saveQuickNote(textarea) {
+  const jobId = textarea.dataset.jobId;
+  const note = textarea.value;
+  const fd = new FormData();
+  fd.append('quick_note', note);
+  fetch(`/job/${jobId}/quick-note`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        textarea.style.borderColor = 'var(--success)';
+        setTimeout(() => { textarea.style.borderColor = ''; }, 1000);
+      }
+    }).catch(() => {});
+}
+
+// Archive/unarchive AJAX
+function archiveJob(jobId, btn) {
+  const fd = new FormData();
+  fd.append('ajax', '1');
+  fetch(`/job/${jobId}/archive`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        btn.textContent = data.archived ? '📤' : '📦';
+        btn.title = data.archived ? 'Unarchive' : 'Archive';
+        const card = document.getElementById(`job-card-${jobId}`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s';
+          card.style.opacity = '0.5';
+          setTimeout(() => {
+            if (!data.archived) card.style.opacity = '';
+            else card.remove();
+          }, 500);
+        }
+        showToast(data.archived ? '📦 Archived' : '📤 Unarchived', null, 2500);
+      }
+    }).catch(() => showToast('Archive failed', null, 3000));
 }
 
 // Feature 1: Inline status dropdown

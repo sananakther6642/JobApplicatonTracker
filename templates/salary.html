@@ -28,6 +28,36 @@
   <button type="submit" class="btn btn-secondary">Sort</button>
 </form>
 
+<!-- Salary by Role & Location Heatmap Cards (Feature 7) -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
+  {% if by_role %}
+  <div class="card" style="padding:20px 24px">
+    <div class="section-title">💼 Salary Data by Role</div>
+    {% for r in by_role %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="font-weight:600">{{ r.role }}</span>
+      <div style="text-align:right">
+        <span style="color:var(--success);font-weight:700">{{ r.salary_range }}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:4px">({{ r.cnt }})</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if by_location %}
+  <div class="card" style="padding:20px 24px">
+    <div class="section-title">📍 Salary Data by Location</div>
+    {% for loc in by_location %}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span style="font-weight:600">{{ loc.location }}</span>
+      <span style="font-size:12px;color:var(--text2);font-weight:600">{{ loc.cnt }} job{{ 's' if loc.cnt != 1 else '' }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
 <!-- Grouped by status -->
 {% for s in statuses %}
   {% if by_status.get(s) %}

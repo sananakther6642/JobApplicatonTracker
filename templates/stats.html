@@ -134,6 +134,56 @@
 </div>
 {% endif %}
 
+<!-- Application Velocity Chart (Feature 8) -->
+{% if weekly_velocity %}
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div class="section-title">📈 Application Velocity (Last 12 Weeks)</div>
+  {% set max_vel = weekly_velocity | map(attribute='cnt') | max %}
+  <div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:12px">
+    {% for w in weekly_velocity %}
+    {% set h = ((w.cnt / max_vel) * 75) | int if max_vel > 0 else 0 %}
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <span style="font-size:10.5px;color:var(--text2);font-weight:700">{{ w.cnt }}</span>
+      <div style="width:100%;background:linear-gradient(to top, var(--accent), var(--purple));border-radius:4px 4px 0 0;min-height:4px;height:{{ h }}px;transition:height 0.3s ease"></div>
+      <span style="font-size:9.5px;color:var(--text3);white-space:nowrap">{{ w.week[5:] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Source Conversion Funnel (Feature 9) -->
+{% if source_funnel %}
+<div class="card" style="padding:20px 24px;margin-bottom:20px">
+  <div class="section-title">🎯 Conversion Funnel by Source</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+    <thead>
+      <tr style="border-bottom:2px solid var(--border)">
+        <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">Source</th>
+        <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">Applied</th>
+        <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">Interviews</th>
+        <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">Offers</th>
+        <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">Interview %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in source_funnel %}
+      {% set irate = ((f.interview_cnt / f.applied_cnt * 100)|int) if f.applied_cnt > 0 else 0 %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px;font-weight:600">{{ f.source }}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--text2)">{{ f.applied_cnt }}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--accent);font-weight:700">{{ f.interview_cnt }}</td>
+        <td style="padding:8px 10px;text-align:center;color:var(--success);font-weight:700">{{ f.offer_cnt }}</td>
+        <td style="padding:8px 10px;text-align:center">
+          <span class="badge" style="background:var(--accent-light);color:var(--accent)">{{ irate }}%</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- Rejection Breakdown (Feature 6) -->
 {% if rejection_breakdown %}
 <div class="card" style="padding:20px 24px;margin-bottom:20px">

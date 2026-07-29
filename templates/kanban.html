@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Kanban Board — JAT{% endblock %}
+{% block content %}
+<style>
+.kanban-wrapper {
+  overflow-x: auto;
+  padding-bottom: 16px;
+}
+.kanban-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: max-content;
+}
+.kanban-col {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg2);
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 200px;
+}
+.kanban-col-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; padding: 0 2px;
+}
+.kanban-col-title {
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.kanban-count {
+  font-size: 11px; font-weight: 700; color: var(--text3);
+  background: var(--border); border-radius: 99px;
+  padding: 2px 8px; min-width: 22px; text-align: center;
+}
+.kanban-drop-zone {
+  min-height: 80px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.kanban-drop-zone.drag-over {
+  background: var(--accent-glow);
+  outline: 2px dashed var(--accent);
+}
+.kanban-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 11px;
+  margin-bottom: 8px;
+  cursor: grab;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s, transform 0.12s;
+  user-select: none;
+  position: relative;
+}
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+.kanban-card:hover { box-shadow: var(--shadow-md); }
+.k-company {
+  font-size: 12px; font-weight: 800; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.k-role {
+  font-size: 11px; color: var(--text2); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 6px;
+}
+.k-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.k-priority {
+  font-size: 9.5px; font-weight: 700; padding: 1px 6px;
+  border-radius: 99px; letter-spacing: 0.2px;
+}
+.k-priority.high { background: #fef2f2; color: #ef4444; }
+.k-priority.med  { background: #fffbeb; color: #d97706; }
+.k-priority.low  { background: var(--bg); color: var(--text3); }
+.k-days {
+  font-size: 9.5px; color: var(--text3); font-weight: 600;
+}
+.k-star { font-size: 12px; position:absolute; top:8px; right:8px; }
+.k-tags { display:flex; gap:4px; flex-wrap:wrap; margin-top:5px; }
+.k-tag {
+  font-size:9px; padding:1px 5px; border-radius:99px;
+  background:var(--accent-light); color:var(--accent); font-weight:600;
+}
+.kanban-empty {
+  text-align:center; padding:20px 8px; color:var(--text3); font-size:11px;
+}
+.save-toast {
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background:var(--text); color:var(--bg);
+  padding:10px 20px; border-radius:10px; font-size:13px; font-weight:600;
+  z-index:999; display:none; box-shadow:var(--shadow-lg);
+}
+</style>
+
+<div class="page-header">
+  <h1>🗂️ Kanban Board</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span style="font-size:12px;color:var(--text3)">Drag cards to update status</span>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary btn-sm">List View</a>
+    <a href="{{ url_for('calendar_view') }}" class="btn btn-secondary btn-sm">Calendar</a>
+  </div>
+</div>
+
+<div class="kanban-wrapper">
+  <div class="kanban-board" id="kanban-board">
+    {% for status in kanban_statuses %}
+    {% set jobs_in_col = kanban[status] %}
+    <div class="kanban-col" data-status="{{ status }}">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title" style="color:{{ status_colors.get(status,'var(--text)') }}">
+          {{ status_labels[status] }}
+        </span>
+        <span class="kanban-count">{{ jobs_in_col|length }}</span>
+      </div>
+      <div class="kanban-drop-zone" id="zone-{{ status }}"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,'{{ status }}')">
+        {% for job in jobs_in_col %}
+        {% set score = priority.get(job.id, 0) %}
+        {% set tags = tags_by_job.get(job.id, []) %}
+        {% set applied = job.applied_date or '' %}
+        <div class="kanban-card"
+             draggable="true"
+             data-job-id="{{ job.id }}"
+             data-status="{{ job.status }}"
+             ondragstart="onDragStart(event)"
+             ondragend="onDragEnd(event)"
+             onclick="if(!event.defaultPrevented && !window._dragMoved) window.location.href='/job/{{ job.id }}'">
+          {% if job.starred %}<span class="k-star">⭐</span>{% endif %}
+          <div class="k-company" title="{{ job.company }}">{{ job.company }}</div>
+          <div class="k-role" title="{{ job.role }}">{{ job.role }}</div>
+          <div class="k-meta">
+            {% if score >= 60 %}
+            <span class="k-priority high">🔥 High</span>
+            {% elif score >= 35 %}
+            <span class="k-priority med">⚡ Med</span>
+            {% else %}
+            <span class="k-priority low">Low</span>
+            {% endif %}
+            {% if applied %}
+            <span class="k-days">{{ applied[5:] }}</span>
+            {% endif %}
+            {% if job.interest_score %}
+            <span style="font-size:9.5px;color:#f59e0b">{{ '★' * job.interest_score|int }}</span>
+            {% endif %}
+          </div>
+          {% if tags %}
+          <div class="k-tags">
+            {% for tag in tags[:3] %}
+            <span class="k-tag">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="kanban-empty">Drop here</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="save-toast" id="save-toast"></div>
+
+<script>
+let draggedCard = null;
+let draggedJobId = null;
+let draggedFromStatus = null;
+window._dragMoved = false;
+
+function onDragStart(e) {
+  draggedCard = e.currentTarget;
+  draggedJobId = draggedCard.dataset.jobId;
+  draggedFromStatus = draggedCard.dataset.status;
+  window._dragMoved = false;
+  setTimeout(() => draggedCard.classList.add('dragging'), 0);
+}
+
+function onDragEnd(e) {
+  if (draggedCard) draggedCard.classList.remove('dragging');
+  document.querySelectorAll('.kanban-drop-zone').forEach(z => z.classList.remove('drag-over'));
+  setTimeout(() => { window._dragMoved = false; }, 100);
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  window._dragMoved = true;
+  e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onDrop(e, newStatus) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  window._dragMoved = true;
+  if (!draggedJobId || !draggedCard) return;
+  if (draggedFromStatus === newStatus) return; // no change
+
+  const zone = e.currentTarget;
+
+  // Remove empty placeholder if present
+  const empty = zone.querySelector('.kanban-empty');
+  if (empty) empty.remove();
+
+  // Move card to new column
+  draggedCard.dataset.status = newStatus;
+  zone.insertBefore(draggedCard, zone.firstChild);
+
+  // Update count badges
+  updateCount(draggedFromStatus);
+  updateCount(newStatus);
+
+  // AJAX status update
+  const fd = new FormData();
+  fd.append('new_status', newStatus);
+  fetch(`/job/${draggedJobId}/quick-status`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        showSaveToast(`✓ ${data.label}`);
+      } else {
+        showSaveToast('⚠️ Failed to save', true);
+      }
+    }).catch(() => showSaveToast('⚠️ Network error', true));
+
+  draggedCard = null;
+  draggedJobId = null;
+  draggedFromStatus = null;
+}
+
+function updateCount(status) {
+  const col = document.querySelector(`.kanban-col[data-status="${status}"]`);
+  if (!col) return;
+  const cnt = col.querySelectorAll('.kanban-card').length;
+  const badge = col.querySelector('.kanban-count');
+  if (badge) badge.textContent = cnt;
+  // Add empty placeholder if column is empty
+  const zone = col.querySelector('.kanban-drop-zone');
+  if (zone && cnt === 0 && !zone.querySelector('.kanban-empty')) {
+    const el = document.createElement('div');
+    el.className = 'kanban-empty';
+    el.textContent = 'Drop here';
+    zone.appendChild(el);
+  }
+}
+
+function showSaveToast(msg, isError) {
+  const t = document.getElementById('save-toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.background = isError ? 'var(--danger)' : 'var(--text)';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 2500);
+}
+</script>
+
+{% endblock %}
