@@ -85,6 +85,7 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 - **Salary negotiation** — initial offer → counter → final, all tracked
 - **Documents** — upload CV, cover letter, assignments per job (auto-named)
 - **Contact book** — recruiters (name, email, phone, LinkedIn) auto-added when you save a job
+- **Automated DB Auto-Backup** — `jobs.db.bak` is created on server boot to protect data against accidental loss
 
 ### Find what you need instantly
 
@@ -93,6 +94,12 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 - **Sort** by date, company, salary, interest score
 - **Tags** — comma-separated, filterable pills on every job
 - **Click any job card** to open its full detail page — no need to hunt for a "View" button
+
+### ✨ Generate from JD & 1-Click Capture
+
+- **Clipboard One-Click Paste**: `📋 Paste from Clipboard` button populates raw JDs in under a second
+- **Browser Bookmarklet**: Drag the `🔖 Track with JAT` bookmarklet to your browser toolbar to capture highlighted JDs from LinkedIn, Indeed, or StepStone in 1 click
+- **Offline Extraction**: Extracts company, role, location, salary, tags, recruiter info, and interest score automatically
 
 ### Dashboard that actually tells you something
 
@@ -194,8 +201,9 @@ Files are renamed automatically on upload:
 | Action | How |
 |--------|-----|
 | Export all jobs | CSV → open in Excel/Sheets |
+| Export Summary Report | Text digest download via `📄 Summary Report` button |
 | Import from CSV | Any CSV with Company + Role columns |
-| Backup database | Download `jobs.db` |
+| Automatic Backup | `jobs.db.bak` created automatically on every boot |
 | Restore database | Upload `.db` file (auto-saves `.bak` first) |
 
 ---
@@ -255,7 +263,7 @@ jat/
 
 ## Testing
 
-47 pytest tests covering routes, helpers, and DB logic.
+50 pytest tests covering routes, helpers, and DB logic.
 
 ```bash
 # Install test dependency (one-time)
