@@ -271,4 +271,10 @@ class TestNewFeatureUpgrades:
         assert resp.status_code == 200
         assert b"Senior Python Developer Role" in resp.data
 
+    def test_generate_bookmarklet_autostart(self, client):
+        resp = client.get("/generate?jd_text=Senior+Dev+at+Google&autostart=1")
+        assert resp.status_code == 200
+        assert b"name=\"autostart\" value=\"1\"" in resp.data
+        assert b"Bookmarklet Tool" in resp.data
+
 

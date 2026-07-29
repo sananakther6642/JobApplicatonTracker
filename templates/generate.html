@@ -44,12 +44,14 @@
         ⚡ Generate JSON
       </button>
 
+      <input type="hidden" name="autostart" value="{{ request.args.get('autostart', request.form.get('autostart', '')) }}">
+
       <div style="margin-top:16px;padding:12px 14px;background:var(--bg2);border-radius:8px;font-size:12px">
         <div style="font-weight:600;margin-bottom:4px;color:var(--text)">💡 Bookmarklet Tool (1-Click Track)</div>
-        <div style="color:var(--text2);margin-bottom:6px">Drag this button to your browser bookmarks bar. Highlight any JD text on LinkedIn or Indeed, then click the bookmarklet to track:</div>
-        <a href="javascript:(function(){var%20t=window.getSelection().toString();window.open('http://localhost:5050/generate?jd_text='+encodeURIComponent(t),'_blank');})();"
+        <div style="color:var(--text2);margin-bottom:6px">Drag this button to your browser bookmarks bar. Works on any company website or job board (LinkedIn, Indeed, Greenhouse, Workday, company career pages):</div>
+        <a href="javascript:(function(){var%20s=window.getSelection().toString();var%20u=location.href;var%20t=document.title;var%20txt=s%26%26s.trim()?s.trim():(document.body?document.body.innerText.slice(0,4000):'');var%20input=prompt('🔖%20Track%20with%20JAT:%5CnConfirm%20or%20edit%20the%20Job%20Description%20from%20'+location.hostname+':',txt);if(input!==null%26%26input.trim()){var%20full=input.trim()+'%5Cn%5CnURL:%20'+u+'%5CnPage%20Title:%20'+t;window.open('http://localhost:5050/generate?jd_text='+encodeURIComponent(full)+'&autostart=1','_blank');}})();"
            class="btn btn-secondary btn-sm"
-           onclick="alert('Drag this button to your browser bookmarks bar to install!');return false;">
+           onclick="if(event.target.getAttribute('href').startsWith('javascript:')){alert('Drag this button to your browser bookmarks bar to install!');return false;}">
           🔖 Track with JAT
         </a>
       </div>
@@ -88,6 +90,7 @@
     <form id="gen-result-form">
     <input type="hidden" name="cv_pending" value="{{ cv_pending or '' }}">
     <input type="hidden" name="cover_pending" value="{{ cover_pending or '' }}">
+    <input type="hidden" name="autostart" value="{{ request.args.get('autostart', request.form.get('autostart', '')) }}">
     <div class="card" style="padding:24px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">{{ 'Generated Job' if generated else 'Job Fields' }}</div>
@@ -348,6 +351,31 @@ function pasteClipboard() {
     showToast('Clipboard access denied — please paste with Ctrl+V / Cmd+V', null, 3000);
   });
 }
+
+// ── Bookmarklet Autostart & Auto-Push handler ────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const autostart = urlParams.get('autostart') === '1' || document.querySelector('input[name="autostart"]')?.value === '1';
+
+  if (autostart) {
+    {% if not generated %}
+    const jdText = document.getElementById('jd-text');
+    if (jdText && jdText.value.trim()) {
+      const btn = document.getElementById('generate-btn');
+      if (btn) {
+        btn.innerHTML = '⚡ Auto-Generating JSON…';
+        btn.disabled = true;
+      }
+      document.getElementById('gen-form').submit();
+    }
+    {% else %}
+    showResult('success', '⚡ Auto-pushing job to tracker database…');
+    setTimeout(function() {
+      pushJob();
+    }, 400);
+    {% endif %}
+  }
+});
 </script>
 
 {% endblock %}
