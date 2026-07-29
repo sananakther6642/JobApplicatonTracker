@@ -57,7 +57,7 @@ if %errorlevel% equ 0 (
 )
 
 if not defined OLLAMA_EXE (
-    echo [info] Ollama installation could not be completed -- skipping local AI setup (regex-only extraction will be used).
+    echo [info] Ollama installation could not be completed -- skipping local AI setup ^(regex-only extraction will be used^).
     echo       Install Ollama manually from https://ollama.com to enable AI-assisted extraction.
     goto :start_server
 )
