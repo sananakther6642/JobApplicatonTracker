@@ -5,6 +5,7 @@ import csv
 import io
 import time
 import uuid
+import shutil
 from flask import (Flask, render_template, request, redirect, url_for,
                    send_from_directory, abort, flash, make_response, jsonify)
 from werkzeug.utils import secure_filename
@@ -149,6 +150,11 @@ def get_db():
 
 
 def init_db():
+    if os.path.isfile(DB) and os.path.getsize(DB) > 0:
+        try:
+            shutil.copy2(DB, f"{DB}.bak")
+        except OSError:
+            pass
     with get_db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS jobs (
@@ -849,6 +855,11 @@ def generate_job():
     cover_info = None
 
     cv_pending = cover_pending = None
+
+    if request.method == "GET":
+        get_jd = request.args.get("jd_text", "").strip()
+        if get_jd:
+            job["jd"] = get_jd
 
     if request.method == "POST":
         try:
@@ -1631,6 +1642,48 @@ def export_csv():
     fname = f"jobs_export_{date.today().isoformat()}.csv"
     response.headers["Content-Disposition"] = f"attachment; filename={fname}"
     response.headers["Content-Type"] = "text/csv"
+    return response
+
+
+@app.route("/export-report")
+def export_report():
+    with get_db() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        jobs = conn.execute("SELECT * FROM jobs ORDER BY applied_date DESC").fetchall()
+        counts = {}
+        for s in STATUSES:
+            counts[s] = conn.execute("SELECT COUNT(*) FROM jobs WHERE status=?", (s,)).fetchone()[0]
+
+    lines = [
+        "===================================================",
+        "        JOB APPLICATION TRACKER (JAT) REPORT       ",
+        f"        Generated on {date.today().isoformat()}    ",
+        "===================================================",
+        "",
+        f"Total Applications: {total}",
+        f"Offers: {counts.get('offer', 0)}",
+        f"Interviews: {counts.get('phone_interview', 0) + counts.get('technical_interview', 0) + counts.get('final_interview', 0)}",
+        f"Rejections: {counts.get('rejected', 0)}",
+        f"Ghosted: {counts.get('ghosted', 0)}",
+        "",
+        "---------------------------------------------------",
+        "APPLICATION DETAILS",
+        "---------------------------------------------------",
+    ]
+
+    for j in jobs:
+        status_lbl = STATUS_LABELS.get(j['status'], j['status'])
+        lines.append(f"• [{j['applied_date'] or 'N/A'}] {j['company']} — {j['role']} ({status_lbl})")
+        if j['location'] or j['salary_range']:
+            lines.append(f"  Location: {j['location'] or 'N/A'} | Salary: {j['salary_range'] or 'N/A'}")
+        if j['next_action']:
+            lines.append(f"  Next Action: {j['next_action']}")
+
+    content = "\n".join(lines)
+    response = make_response(content)
+    fname = f"jat_report_{date.today().isoformat()}.txt"
+    response.headers["Content-Disposition"] = f"attachment; filename={fname}"
+    response.headers["Content-Type"] = "text/plain; charset=utf-8"
     return response
 
 

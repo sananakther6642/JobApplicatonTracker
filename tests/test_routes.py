@@ -257,3 +257,18 @@ class TestWeeklyAndMonthlyGoals:
         val_cleared = db.execute("SELECT value FROM settings WHERE key='weekly_goal'").fetchone()
         assert val_cleared is None
 
+
+class TestNewFeatureUpgrades:
+    def test_export_report_route(self, client, sample_job):
+        resp = client.get("/export-report")
+        assert resp.status_code == 200
+        assert resp.content_type.startswith("text/plain")
+        assert b"JOB APPLICATION TRACKER (JAT) REPORT" in resp.data
+        assert sample_job["company"].encode() in resp.data
+
+    def test_generate_get_query_param(self, client):
+        resp = client.get("/generate?jd_text=Senior+Python+Developer+Role")
+        assert resp.status_code == 200
+        assert b"Senior Python Developer Role" in resp.data
+
+

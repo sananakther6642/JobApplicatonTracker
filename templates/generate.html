@@ -16,11 +16,14 @@
     <form method="POST" enctype="multipart/form-data" id="gen-form">
 
       <div style="margin-bottom:18px">
-        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:6px">Job Description <span style="color:var(--danger)">*</span></label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label style="font-weight:600;font-size:13px;margin:0">Job Description <span style="color:var(--danger)">*</span></label>
+          <button type="button" onclick="pasteClipboard()" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px">📋 Paste from Clipboard</button>
+        </div>
         <textarea name="jd_text" id="jd-text" rows="16"
           placeholder="Paste the full job description here — company, role, salary, location, requirements, contacts…"
           style="width:100%;font-family:inherit;font-size:13px;padding:12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical;line-height:1.6;box-sizing:border-box"
-          required>{{ request.form.get('jd_text', '') }}</textarea>
+          required>{{ request.form.get('jd_text', '') or job.jd }}</textarea>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
@@ -40,6 +43,16 @@
       <button type="submit" class="btn btn-primary" id="generate-btn" style="width:100%;padding:11px">
         ⚡ Generate JSON
       </button>
+
+      <div style="margin-top:16px;padding:12px 14px;background:var(--bg2);border-radius:8px;font-size:12px">
+        <div style="font-weight:600;margin-bottom:4px;color:var(--text)">💡 Bookmarklet Tool (1-Click Track)</div>
+        <div style="color:var(--text2);margin-bottom:6px">Drag this button to your browser bookmarks bar. Highlight any JD text on LinkedIn or Indeed, then click the bookmarklet to track:</div>
+        <a href="javascript:(function(){var%20t=window.getSelection().toString();window.open('http://localhost:5050/generate?jd_text='+encodeURIComponent(t),'_blank');})();"
+           class="btn btn-secondary btn-sm"
+           onclick="alert('Drag this button to your browser bookmarks bar to install!');return false;">
+          🔖 Track with JAT
+        </a>
+      </div>
     </form>
   </div>
 
@@ -321,6 +334,19 @@ function showResult(type, html) {
     el.style.border = '1px solid var(--danger)';
   }
   el.innerHTML = html;
+}
+
+function pasteClipboard() {
+  navigator.clipboard.readText().then(text => {
+    if (text && text.trim()) {
+      document.getElementById('jd-text').value = text;
+      showToast('Pasted from clipboard', null, 2000);
+    } else {
+      showToast('Clipboard is empty', null, 2000);
+    }
+  }).catch(() => {
+    showToast('Clipboard access denied — please paste with Ctrl+V / Cmd+V', null, 3000);
+  });
 }
 </script>
 
