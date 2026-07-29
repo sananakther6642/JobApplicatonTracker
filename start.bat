@@ -35,6 +35,9 @@ where winget >nul 2>nul
 if %errorlevel% equ 0 (
     echo Installing Ollama via winget...
     winget install Ollama.Ollama --accept-package-agreements --accept-source-agreements >nul 2>&1
+    REM Wait for Windows to update the registry/PATH environment variables.
+    echo Waiting for Windows to finish updating environment variables...
+    timeout /t 5 /nobreak >nul
 )
 
 REM Re-check before falling back to the manual installer below.
@@ -64,6 +67,10 @@ if exist "%TEMP%\OllamaSetup.exe" (
     echo start now using regex-only extraction and pick up Ollama automatically
     echo the next time you run start.bat once it's installed.
     start "" "%TEMP%\OllamaSetup.exe"
+    REM Wait for the installer to finish writing to the registry and
+    REM updating PATH before we check for ollama.exe again.
+    echo Waiting for the installer to finish...
+    timeout /t 10 /nobreak >nul
 ) else (
     echo [warn] Could not download Ollama installer.
 )
