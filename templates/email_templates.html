@@ -19,9 +19,9 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0">
-        <button type="button" onclick="copySubject({{ loop.index }})" class="btn btn-ghost btn-sm" id="copy-subj-{{ loop.index }}">📋 Copy Subject</button>
-        <button type="button" onclick="copyBody({{ loop.index }})" class="btn btn-secondary btn-sm" id="copy-body-{{ loop.index }}">📋 Copy Body</button>
-        <button type="button" onclick="resetTemplate({{ loop.index }})" class="btn btn-ghost btn-sm" title="Reset placeholders">↺ Reset</button>
+        <button type="button" onclick="copySubject('{{ loop.index }}')" class="btn btn-ghost btn-sm" id="copy-subj-{{ loop.index }}">📋 Copy Subject</button>
+        <button type="button" onclick="copyBody('{{ loop.index }}')" class="btn btn-secondary btn-sm" id="copy-body-{{ loop.index }}">📋 Copy Body</button>
+        <button type="button" onclick="resetTemplate('{{ loop.index }}')" class="btn btn-ghost btn-sm" title="Reset placeholders">↺ Reset</button>
       </div>
     </div>
 
@@ -85,10 +85,13 @@
 .ph-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </style>
 
+<script id="jobs-data" type="application/json">{{ jobs | tojson | safe }}</script>
+<script id="settings-data" type="application/json">{{ settings | tojson | safe }}</script>
+
 <script>
 // ── Job data from server ──────────────────────────────────────────────────────
-const JOBS = {{ jobs | tojson }};
-const SETTINGS = {{ settings | tojson }};
+const JOBS = JSON.parse(document.getElementById('jobs-data').textContent);
+const SETTINGS = JSON.parse(document.getElementById('settings-data').textContent);
 
 // ── Placeholder → suggestion builder ─────────────────────────────────────────
 function getSuggestions(placeholder) {
