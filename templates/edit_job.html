@@ -116,7 +116,7 @@
         <label class="form-label">Interest Score</label>
         <div style="display:flex;gap:4px;align-items:center" id="interest-stars">
           {% for i in range(1,6) %}
-          <label style="cursor:pointer;font-size:24px;color:{% if job.interest_score and i <= job.interest_score %}#f59e0b{% else %}#e2e8f0{% endif %};transition:color 0.1s" class="interest-star-label">
+          <label style="cursor:pointer;font-size:24px;color:{% if job.interest_score and i <= job.interest_score %}#f59e0b{% else %}var(--border2){% endif %};transition:color 0.1s" class="interest-star-label">
             <input type="radio" name="interest_score" value="{{ i }}" {% if job.interest_score and i == job.interest_score %}checked{% endif %} style="display:none">
             ★
           </label>

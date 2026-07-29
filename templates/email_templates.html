@@ -509,8 +509,9 @@ function copyBody(idx) {
     text = getRenderedText('tpl-body-' + idx);
   }
   // Fallback: use raw template text if DOM is empty (details never opened)
-  if (!text.trim() && RAW_BODIES[String(idx)]) {
-    text = RAW_BODIES[String(idx)];
+  const rawEl = document.getElementById('tpl-raw-body-' + idx);
+  if (!text.trim()) {
+    text = (RAW_BODIES && (RAW_BODIES[idx] || RAW_BODIES[String(idx)])) || (rawEl ? rawEl.textContent : '');
   }
   if (!text.trim()) { showToast('Body is empty', null, 2000); return; }
   navigator.clipboard.writeText(text).then(() => {
