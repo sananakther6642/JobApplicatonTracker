@@ -32,11 +32,14 @@ JAT is a local-first job application tracker. Run it on your machine, open it in
 git clone https://github.com/sananakther6642/JobApplicatonTracker.git
 cd JobApplicatonTracker
 
-# 2. Run — installs everything automatically, starts server
+# 2. Mac / Linux — run the auto-setup script
 ./start.sh
 
-# 3. Open
-open http://localhost:5050
+# 2. Windows (PowerShell) — manual setup
+python -m venv .venv
+.\.venv\Scripts\Activate
+pip install -r requirements.txt
+python app.py
 ```
 
 That's it. `start.sh` installs Python dependencies (Flask, pdfminer.six)
@@ -44,6 +47,28 @@ automatically, and — best-effort, non-blocking — installs Ollama and pulls
 the small local AI model used for the optional JD-generation assist. If
 Ollama/Homebrew aren't available it just skips that step and the app runs
 fine on regex-only extraction.
+
+### Opening the app
+
+```bash
+# Mac / Linux
+open http://localhost:5050
+
+# Windows
+start http://localhost:5050
+```
+
+### Windows notes
+
+- `start.sh` is a Unix shell script and does not run on Windows. Use the
+  manual PowerShell steps above instead.
+- For the optional local AI assist you must install **Ollama** separately
+  from https://ollama.com, then run:
+  ```
+  ollama pull qwen2.5:0.5b
+  ollama serve
+  ```
+  If Ollama isn't running the app works fine — it just skips AI extraction.
 
 ---
 
@@ -117,7 +142,7 @@ to fill in *only* the missing fields. This is:
 - **A gap-filler, never a primary source** — the fast regex result is always trusted first; the AI is only consulted when it's genuinely needed, so well-formed JDs never pay any AI latency
 - **Designed so it can't fabricate content** — the model is never asked to *write* a field's value (a small model asked to do that will confidently invent one, e.g. a phone number that isn't in the JD at all — this was tested extensively). Instead it's only asked to point at *which existing line* of the JD contains each field, and the actual value is always the literal text of that line, extracted by code — not generated. On top of that, each field is sanity-checked against what it should look like (a salary line must contain a currency/number, a phone must be mostly digits, an email must look like an email, a name can't be a company) before being used.
 - **A warning banner** tells you whenever AI-filled fields are present, and the JSON panel always carries a reminder to review before pushing (see disclaimer below) — the worst realistic failure mode left is the AI pointing at the wrong *real* line, never inventing one that doesn't exist.
-- **Auto-installed** — `./start.sh` installs Ollama (via Homebrew) and pulls the model automatically on first run if they're not already present; nothing to set up by hand
+- **Auto-installed** — on Mac/Linux, `./start.sh` installs Ollama (via Homebrew) and pulls the model automatically on first run if they're not already present; nothing to set up by hand. On Windows, install Ollama manually from https://ollama.com and run `ollama pull qwen2.5:0.5b`.
 
 The JSON panel is always editable — you don't have to generate from a JD at
 all; paste or write JSON directly and push it. Whether it came from regex, AI,
@@ -184,7 +209,7 @@ Files are renamed automatically on upload:
 jat/
 ├── app.py              # Flask backend — all routes, DB schema, helpers
 ├── gen_job.py          # Offline JD parser — regex extraction + optional local AI gap-filler
-├── start.sh            # ./start.sh — auto-installs deps (incl. Ollama), starts server
+├── start.sh            # Mac/Linux only — auto-installs deps (incl. Ollama), starts server
 ├── requirements.txt    # pip dependencies (flask, pdfminer.six)
 ├── pytest.ini          # Test configuration
 ├── LICENSE
@@ -262,12 +287,18 @@ Open source under the MIT License. Contributions welcome — bug fixes, new feat
 
 ```bash
 # Fork on GitHub, then:
-git clone https://github.com/<your-username>/jat.git
-cd jat
+git clone https://github.com/<your-username>/JobApplicatonTracker.git
+cd JobApplicatonTracker
 git checkout -b fix/describe-your-fix
 
 # Make changes, test locally
+# Mac / Linux
 ./start.sh
+# Windows (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate
+pip install -r requirements.txt
+python app.py
 
 # Push and open a PR against the features branch
 git push origin fix/describe-your-fix
@@ -276,7 +307,7 @@ git push origin fix/describe-your-fix
 **PR guidelines:**
 - Target `features` branch, not `master`
 - One fix or feature per PR — keep it focused
-- Test with `./start.sh` before submitting
+- Test with `./start.sh` (Mac/Linux) or `python app.py` (Windows) before submitting
 - If you only found a bug but can't fix it — open an issue, that's helpful too
 
 ---
