@@ -217,7 +217,10 @@ function onDragStart(e) {
 }
 
 function onDragEnd(e) {
+  if (e.target) e.target.classList.remove('dragging');
+  if (e.currentTarget) e.currentTarget.classList.remove('dragging');
   if (draggedCard) draggedCard.classList.remove('dragging');
+  document.querySelectorAll('.kanban-card.dragging').forEach(c => c.classList.remove('dragging'));
   document.querySelectorAll('.kanban-drop-zone').forEach(z => z.classList.remove('drag-over'));
   setTimeout(() => { window._dragMoved = false; }, 100);
 }
@@ -246,15 +249,24 @@ function onDrop(e, newStatus) {
   window._dragMoved = true;
 
   if (!draggedJobId || !draggedCard) return;
+  
+  const card = draggedCard;
+  card.classList.remove('dragging');
+  
   const fromStatus = draggedFromStatus;
-  if (fromStatus === newStatus) return; // no change
+  if (fromStatus === newStatus) {
+    draggedCard = null;
+    draggedJobId = null;
+    draggedFromStatus = null;
+    return;
+  }
 
   // Optimistic UI updates
   const empty = zone.querySelector('.kanban-empty');
   if (empty) empty.remove();
 
-  draggedCard.dataset.status = newStatus;
-  zone.insertBefore(draggedCard, zone.firstChild);
+  card.dataset.status = newStatus;
+  zone.insertBefore(card, zone.firstChild);
 
   updateCount(fromStatus);
   updateCount(newStatus);
