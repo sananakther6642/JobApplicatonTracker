@@ -502,12 +502,38 @@ def dashboard():
             ORDER BY applied_date ASC
         """).fetchall()
 
-        # Weekly goal
+        # Weekly & Monthly goals calculation
         monday = date.today() - timedelta(days=date.today().weekday())
-        this_week_count = conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE applied_date >= ?",
-            (monday.isoformat(),)
-        ).fetchone()[0]
+        this_month_start = date.today().replace(day=1)
+        
+        job_dates = conn.execute(
+            "SELECT applied_date FROM jobs WHERE applied_date IS NOT NULL AND applied_date != ''"
+        ).fetchall()
+
+        this_week_count = 0
+        this_month_count = 0
+
+        for row in job_dates:
+            raw_date = row['applied_date'].strip()
+            d = None
+            if len(raw_date) >= 10:
+                try:
+                    d = date.fromisoformat(raw_date[:10])
+                except Exception:
+                    pass
+            if d is None:
+                for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y"):
+                    try:
+                        from datetime import datetime
+                        d = datetime.strptime(raw_date, fmt).date()
+                        break
+                    except Exception:
+                        pass
+            if d:
+                if monday <= d <= date.today():
+                    this_week_count += 1
+                if d >= this_month_start:
+                    this_month_count += 1
 
         goal_row = conn.execute(
             "SELECT value FROM settings WHERE key='weekly_goal'"
@@ -524,12 +550,6 @@ def dashboard():
             monthly_goal = int(monthly_goal_row['value']) if monthly_goal_row and monthly_goal_row['value'] else None
         except (ValueError, TypeError):
             monthly_goal = None
-
-        this_month_start = date.today().replace(day=1).isoformat()
-        this_month_count = conn.execute(
-            "SELECT COUNT(*) FROM jobs WHERE applied_date >= ?",
-            (this_month_start,)
-        ).fetchone()[0]
 
     offer_rate = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
     response_rate = round(
@@ -569,15 +589,25 @@ def dashboard():
 def save_settings():
     with get_db() as conn:
         for key in ("weekly_goal", "monthly_goal"):
-            val = request.form.get(key, "").strip()
-            if val:
-                try:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                        (key, str(int(val)))
-                    )
-                except (ValueError, TypeError):
-                    pass
+            if key in request.form:
+                val = request.form.get(key, "").strip()
+                if val:
+                    try:
+                        ival = int(val)
+                        if ival > 0:
+                            conn.execute(
+                                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                                (key, str(ival))
+                            )
+                            flash(f"{key.replace('_', ' ').title()} updated to {ival}.", "success")
+                        else:
+                            conn.execute("DELETE FROM settings WHERE key=?", (key,))
+                            flash(f"{key.replace('_', ' ').title()} cleared.", "info")
+                    except (ValueError, TypeError):
+                        flash(f"Invalid value for {key.replace('_', ' ')}.", "error")
+                else:
+                    conn.execute("DELETE FROM settings WHERE key=?", (key,))
+                    flash(f"{key.replace('_', ' ').title()} cleared.", "info")
     return redirect(url_for("dashboard"))
 
 

@@ -237,3 +237,23 @@ class TestBulkUpdate:
         assert resp.status_code == 200
         updated = db.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
         assert updated["status"] == "screening"
+
+
+class TestWeeklyAndMonthlyGoals:
+    def test_set_and_clear_goals(self, client, db):
+        # Set weekly goal to 5
+        resp = client.post("/settings", data={"weekly_goal": "5"}, follow_redirects=True)
+        assert resp.status_code == 200
+        val = db.execute("SELECT value FROM settings WHERE key='weekly_goal'").fetchone()
+        assert val is not None and val["value"] == "5"
+
+        # Dashboard shows weekly goal 5
+        resp_dash = client.get("/")
+        assert b"5" in resp_dash.data
+
+        # Clear weekly goal (submit empty string)
+        resp_clear = client.post("/settings", data={"weekly_goal": ""}, follow_redirects=True)
+        assert resp_clear.status_code == 200
+        val_cleared = db.execute("SELECT value FROM settings WHERE key='weekly_goal'").fetchone()
+        assert val_cleared is None
+
