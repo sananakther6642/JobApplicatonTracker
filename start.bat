@@ -105,7 +105,7 @@ echo Stopping any existing server on port 5050...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5050" ^| findstr "LISTENING"') do (
     taskkill /PID %%a /F >nul 2>nul
 )
-timeout /t 0.5 /nobreak >nul
+timeout /t 1 /nobreak >nul
 
 echo Starting JAT server on http://localhost:5050 ...
 python app.py
