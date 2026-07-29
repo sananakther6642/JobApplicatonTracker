@@ -1368,6 +1368,7 @@ def print_job(job_id):
         tags=tags,
         rounds=rounds,
         status_labels=STATUS_LABELS,
+        doc_type_labels=DOC_TYPE_LABELS,
     )
 
 

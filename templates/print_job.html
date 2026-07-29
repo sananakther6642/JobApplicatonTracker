@@ -148,7 +148,7 @@
 <h2>Documents</h2>
 {% for doc in documents %}
 <div style="padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
-  {{ doc.filename }} — {{ doc.doc_type }} (uploaded {{ doc.uploaded_at[:10] }})
+  {{ doc.filename }} — {{ doc_type_labels.get(doc.doc_type, doc.doc_type) if doc_type_labels else doc.doc_type }}{% if doc.uploaded_at %} (uploaded {{ doc.uploaded_at[:10] }}){% endif %}
 </div>
 {% endfor %}
 {% endif %}
