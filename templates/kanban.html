@@ -181,7 +181,15 @@ function onDragStart(e) {
   draggedJobId = draggedCard.dataset.jobId;
   draggedFromStatus = draggedCard.dataset.status;
   window._dragMoved = false;
-  setTimeout(() => draggedCard.classList.add('dragging'), 0);
+  
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedJobId);
+  }
+  
+  requestAnimationFrame(() => {
+    if (draggedCard) draggedCard.classList.add('dragging');
+  });
 }
 
 function onDragEnd(e) {
@@ -192,51 +200,58 @@ function onDragEnd(e) {
 
 function onDragOver(e) {
   e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
   window._dragMoved = true;
-  e.currentTarget.classList.add('drag-over');
+  const zone = e.currentTarget;
+  if (!zone.classList.contains('drag-over')) {
+    zone.classList.add('drag-over');
+  }
 }
 
 function onDragLeave(e) {
-  e.currentTarget.classList.remove('drag-over');
+  // Only remove highlight if we actually left the zone container
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over');
+  }
 }
 
 function onDrop(e, newStatus) {
   e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
-  window._dragMoved = true;
-  if (!draggedJobId || !draggedCard) return;
-  if (draggedFromStatus === newStatus) return; // no change
-
   const zone = e.currentTarget;
+  zone.classList.remove('drag-over');
+  window._dragMoved = true;
 
-  // Remove empty placeholder if present
+  if (!draggedJobId || !draggedCard) return;
+  const fromStatus = draggedFromStatus;
+  if (fromStatus === newStatus) return; // no change
+
+  // Optimistic UI updates
   const empty = zone.querySelector('.kanban-empty');
   if (empty) empty.remove();
 
-  // Move card to new column
   draggedCard.dataset.status = newStatus;
   zone.insertBefore(draggedCard, zone.firstChild);
 
-  // Update count badges
-  updateCount(draggedFromStatus);
+  updateCount(fromStatus);
   updateCount(newStatus);
 
-  // AJAX status update
-  const fd = new FormData();
-  fd.append('new_status', newStatus);
-  fetch(`/job/${draggedJobId}/quick-status`, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(data => {
-      if (data.ok) {
-        showSaveToast(`✓ ${data.label}`);
-      } else {
-        showSaveToast('⚠️ Failed to save', true);
-      }
-    }).catch(() => showSaveToast('⚠️ Network error', true));
-
+  const jid = draggedJobId;
   draggedCard = null;
   draggedJobId = null;
   draggedFromStatus = null;
+
+  // Non-blocking async status update
+  const fd = new FormData();
+  fd.append('new_status', newStatus);
+  fetch(`/job/${jid}/quick-status`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        showSaveToast(`✓ Saved: ${data.label}`);
+      } else {
+        showSaveToast('⚠️ Status save error', true);
+      }
+    }).catch(() => showSaveToast('⚠️ Network error', true));
 }
 
 function updateCount(status) {
@@ -245,7 +260,7 @@ function updateCount(status) {
   const cnt = col.querySelectorAll('.kanban-card').length;
   const badge = col.querySelector('.kanban-count');
   if (badge) badge.textContent = cnt;
-  // Add empty placeholder if column is empty
+  
   const zone = col.querySelector('.kanban-drop-zone');
   if (zone && cnt === 0 && !zone.querySelector('.kanban-empty')) {
     const el = document.createElement('div');
@@ -261,7 +276,7 @@ function showSaveToast(msg, isError) {
   t.style.display = 'block';
   t.style.background = isError ? 'var(--danger)' : 'var(--text)';
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.style.display = 'none'; }, 2500);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 2000);
 }
 </script>
 
