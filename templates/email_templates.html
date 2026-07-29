@@ -19,9 +19,9 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0">
-        <button onclick="copySubject({{ loop.index }})" class="btn btn-ghost btn-sm" id="copy-subj-{{ loop.index }}">📋 Copy Subject</button>
-        <button onclick="copyBody({{ loop.index }})" class="btn btn-secondary btn-sm" id="copy-body-{{ loop.index }}">📋 Copy Body</button>
-        <button onclick="resetTemplate({{ loop.index }})" class="btn btn-ghost btn-sm" title="Reset placeholders">↺ Reset</button>
+        <button type="button" onclick="copySubject({{ loop.index }})" class="btn btn-ghost btn-sm" id="copy-subj-{{ loop.index }}">📋 Copy Subject</button>
+        <button type="button" onclick="copyBody({{ loop.index }})" class="btn btn-secondary btn-sm" id="copy-body-{{ loop.index }}">📋 Copy Body</button>
+        <button type="button" onclick="resetTemplate({{ loop.index }})" class="btn btn-ghost btn-sm" title="Reset placeholders">↺ Reset</button>
       </div>
     </div>
 

@@ -451,7 +451,7 @@
   <a href="{{ url_for('import_csv') }}" class="nav-link {% if request.endpoint == 'import_csv' %}active{% endif %}" title="Import CSV">Import</a>
   <a href="{{ url_for('restore_db') }}" class="nav-link {% if request.endpoint == 'restore_db' %}active{% endif %}" title="Backup &amp; Restore">Backup</a>
   <a href="{{ url_for('export_csv') }}" class="btn btn-secondary btn-sm" style="margin-right:6px">Export CSV</a>
-  <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+  <button type="button" class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
 <a href="{{ url_for('generate_job') }}" class="btn btn-sm" id="gen-btn"
      title="Generate from JD (G)"
      style="margin-right:6px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:700;border:none;box-shadow:0 0 0 2px rgba(124,58,237,.25);position:relative">
@@ -466,7 +466,7 @@
   <span style="font-size:16px;flex-shrink:0">✨</span>
   <span><strong>New:</strong> Auto-fill job fields from any job description.
     <a href="{{ url_for('generate_job') }}">Try Generate →</a></span>
-  <button id="gen-tip-close" onclick="dismissGenTip()" title="Dismiss">✕</button>
+  <button type="button" id="gen-tip-close" onclick="dismissGenTip()" title="Dismiss">✕</button>
 </div>
 
 <!-- Toast container -->
@@ -511,9 +511,9 @@ function showToast(msg, undoCallback, autoDismissMs) {
   toast.className = 'toast';
   let inner = `<span style="flex:1">${msg}</span>`;
   if (undoCallback) {
-    inner += `<button class="toast-undo" onclick="this._undoClicked=true;undoToast(this)">Undo</button>`;
+    inner += `<button type="button" class="toast-undo" onclick="this._undoClicked=true;undoToast(this)">Undo</button>`;
   }
-  inner += `<button class="toast-close" onclick="dismissToast(this.closest('.toast'))">&times;</button>`;
+  inner += `<button type="button" class="toast-close" onclick="dismissToast(this.closest('.toast'))">&times;</button>`;
   toast.innerHTML = inner;
   container.appendChild(toast);
 

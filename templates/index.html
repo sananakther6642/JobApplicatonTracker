@@ -55,7 +55,7 @@
     </a>
     {% endfor %}
     <a href="{{ url_for('index', starred='1', search=current_search, sort=current_sort, order=current_order) }}"
-       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);text-decoration:none;color:var(--warn);{% if starred_only %}background:#fffbeb;border-color:#fcd34d;{% endif %}">
+       style="padding:5px 12px;border-radius:99px;font-size:12px;font-weight:500;border:1px solid var(--border2);text-decoration:none;color:var(--warn);{% if starred_only %}background:var(--warn-light);border-color:var(--warn);{% endif %}">
       ★ Starred ({{ counts.get('starred',0) }})
     </a>
     {% if all_tags %}
