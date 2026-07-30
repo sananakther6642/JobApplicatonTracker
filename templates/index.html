@@ -427,17 +427,21 @@ function archiveJob(jobId, btn) {
         btn.title = data.archived ? 'Unarchive' : 'Archive';
         const card = document.getElementById(`job-card-${jobId}`);
         if (card) {
-          card.style.transition = 'opacity 0.3s';
-          card.style.opacity = '0.5';
+          card.style.transition = 'opacity 0.2s, transform 0.2s';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.96)';
           setTimeout(() => {
-            if (!data.archived) card.style.opacity = '';
-            else card.remove();
-          }, 500);
+            card.remove();
+            applyFilters(false);
+          }, 220);
+        } else {
+          applyFilters(false);
         }
-        showToast(data.archived ? '📦 Archived' : '📤 Unarchived', null, 2500);
+        showToast(data.archived ? '📦 Job Archived' : '📤 Job Unarchived', null, 2500);
       }
     }).catch(() => showToast('Archive failed', null, 3000));
 }
+
 
 // Feature 1: Inline status dropdown
 function openStatusDropdown(e, badge) {
