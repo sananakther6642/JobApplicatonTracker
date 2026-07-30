@@ -64,11 +64,11 @@
   {% set pct = ((done_count / items|length) * 100)|int %}
   <div class="card" style="padding:14px 20px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px">
-      <span>{{ done_count }} / {{ items|length }} complete</span>
-      <span class="{% if pct == 100 %}cl-success{% else %}cl-accent{% endif %}">{{ pct }}%</span>
+      <span id="cl-count">{{ done_count }} / {{ items|length }} complete</span>
+      <span id="cl-pct" class="{% if pct == 100 %}cl-success{% else %}cl-accent{% endif %}">{{ pct }}%</span>
     </div>
     <div style="background:var(--bg);border-radius:6px;height:8px;overflow:hidden">
-      <div class="cl-bar {% if pct == 100 %}cl-bar-success{% endif %}" style="--bar-w:{{ pct }}%;width:var(--bar-w)"></div>
+      <div id="cl-bar" class="cl-bar {% if pct == 100 %}cl-bar-success{% endif %}" style="width:{{ pct }}%"></div>
     </div>
   </div>
 
@@ -76,19 +76,11 @@
   <div class="card" style="padding:8px 0;margin-bottom:16px">
     {% for item in items %}
     <div class="cl-item {% if item.done %}cl-item-done{% endif %} {% if not loop.last %}cl-item-border{% endif %}">
-      <form method="post" action="{{ url_for('checklist', job_id=job.id) }}" style="margin:0">
-        <input type="hidden" name="action" value="toggle">
-        <input type="hidden" name="item_id" value="{{ item.id }}">
-        <button type="submit" class="cl-check {% if item.done %}cl-check-done{% endif %}">
-          {% if item.done %}✓{% endif %}
-        </button>
-      </form>
+      <button type="button" onclick="toggleCheckItem(this, {{ item.id }})" class="cl-check {% if item.done %}cl-check-done{% endif %}">
+        {% if item.done %}✓{% endif %}
+      </button>
       <span class="cl-label {% if item.done %}cl-label-done{% endif %}">{{ item.item }}</span>
-      <form method="post" action="{{ url_for('checklist', job_id=job.id) }}" style="margin:0">
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="item_id" value="{{ item.id }}">
-        <button type="submit" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px" onclick="return confirm('Remove this item?')">✕</button>
-      </form>
+      <button type="button" onclick="deleteCheckItem(this, {{ item.id }})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px">✕</button>
     </div>
     {% endfor %}
   </div>
@@ -113,5 +105,83 @@
     </form>
   </div>
 </div>
+
+<script>
+function toggleCheckItem(btn, itemId) {
+  const fd = new FormData();
+  fd.append('action', 'toggle');
+  fd.append('item_id', itemId);
+  fd.append('ajax', '1');
+
+  fetch('{{ url_for("checklist", job_id=job.id) }}', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        const itemRow = btn.closest('.cl-item');
+        const label = itemRow.querySelector('.cl-label');
+        const isDone = btn.classList.contains('cl-check-done');
+
+        if (isDone) {
+          btn.classList.remove('cl-check-done');
+          btn.textContent = '';
+          itemRow.classList.remove('cl-item-done');
+          if (label) label.classList.remove('cl-label-done');
+        } else {
+          btn.classList.add('cl-check-done');
+          btn.textContent = '✓';
+          itemRow.classList.add('cl-item-done');
+          if (label) label.classList.add('cl-label-done');
+        }
+
+        const countSpan = document.getElementById('cl-count');
+        const pctSpan = document.getElementById('cl-pct');
+        const bar = document.getElementById('cl-bar');
+
+        if (countSpan) countSpan.textContent = `${data.done_count} / ${data.total_count} complete`;
+        if (pctSpan) {
+          pctSpan.textContent = `${data.pct}%`;
+          pctSpan.className = data.pct === 100 ? 'cl-success' : 'cl-accent';
+        }
+        if (bar) {
+          bar.style.width = `${data.pct}%`;
+          if (data.pct === 100) bar.classList.add('cl-bar-success');
+          else bar.classList.remove('cl-bar-success');
+        }
+      }
+    });
+}
+
+function deleteCheckItem(btn, itemId) {
+  if (!confirm('Remove this item?')) return;
+  const fd = new FormData();
+  fd.append('action', 'delete');
+  fd.append('item_id', itemId);
+  fd.append('ajax', '1');
+
+  fetch('{{ url_for("checklist", job_id=job.id) }}', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        const itemRow = btn.closest('.cl-item');
+        if (itemRow) itemRow.remove();
+
+        const countSpan = document.getElementById('cl-count');
+        const pctSpan = document.getElementById('cl-pct');
+        const bar = document.getElementById('cl-bar');
+
+        if (countSpan) countSpan.textContent = `${data.done_count} / ${data.total_count} complete`;
+        if (pctSpan) {
+          pctSpan.textContent = `${data.pct}%`;
+          pctSpan.className = data.pct === 100 ? 'cl-success' : 'cl-accent';
+        }
+        if (bar) {
+          bar.style.width = `${data.pct}%`;
+          if (data.pct === 100) bar.classList.add('cl-bar-success');
+          else bar.classList.remove('cl-bar-success');
+        }
+      }
+    });
+}
+</script>
 
 {% endblock %}

@@ -1819,6 +1819,15 @@ def checklist(job_id):
                             "INSERT INTO interview_checklist (job_id, item) VALUES (?,?)",
                             (job_id, item)
                         )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax"):
+                items = conn.execute(
+                    "SELECT * FROM interview_checklist WHERE job_id=? ORDER BY created_at ASC",
+                    (job_id,)
+                ).fetchall()
+                done_count = sum(1 for i in items if i["done"])
+                total_cnt = len(items)
+                pct = int((done_count / total_cnt) * 100) if total_cnt > 0 else 0
+                return jsonify({"ok": True, "done_count": done_count, "total_count": total_cnt, "pct": pct})
             return redirect(url_for("checklist", job_id=job_id))
 
         items = conn.execute(
