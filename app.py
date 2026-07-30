@@ -1449,6 +1449,7 @@ def quick_status(job_id):
     new_status = request.form.get("new_status")
     if new_status not in STATUSES:
         abort(400)
+    skip_timeline   = request.form.get("skip_timeline", "0") == "1"
     rejection_reason = request.form.get("rejection_reason", "").strip()
     rejection_note   = request.form.get("rejection_note", "").strip()
     with get_db() as conn:
@@ -1460,17 +1461,45 @@ def quick_status(job_id):
                 "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                 (new_status, job_id)
             )
-            # When rejecting, optionally save reason and add descriptive timeline note
             if new_status == "rejected" and rejection_reason:
                 conn.execute(
                     "UPDATE jobs SET rejection_reason=? WHERE id=?",
                     (rejection_reason, job_id)
                 )
-            conn.execute(
-                "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,date('now'),?)",
-                (job_id, STATUS_LABELS.get(new_status, new_status), rejection_note)
-            )
+            if not skip_timeline:
+                conn.execute(
+                    "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,date('now'),?)",
+                    (job_id, STATUS_LABELS.get(new_status, new_status), rejection_note)
+                )
     return jsonify({"ok": True, "status": new_status, "label": STATUS_LABELS.get(new_status, new_status)})
+
+
+@app.route("/job/<int:job_id>/reset-to-applied", methods=["POST"])
+def reset_to_applied(job_id):
+    """Reset a job to Applied status and clean up spurious Kanban stage
+    entries from the timeline, keeping only the original initial application."""
+    with get_db() as conn:
+        job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        # Reset status
+        conn.execute(
+            "UPDATE jobs SET status='applied', updated_at=datetime('now') WHERE id=?",
+            (job_id,)
+        )
+        # Keep only the very first timeline entry (initial application),
+        # delete everything after it (all the Kanban-drag stage noise).
+        first = conn.execute(
+            "SELECT id FROM timeline WHERE job_id=? ORDER BY id ASC LIMIT 1",
+            (job_id,)
+        ).fetchone()
+        if first:
+            conn.execute(
+                "DELETE FROM timeline WHERE job_id=? AND id > ?",
+                (job_id, first["id"])
+            )
+    return jsonify({"ok": True})
+
 
 
 
@@ -1810,6 +1839,7 @@ def bulk_update():
     job_ids = request.form.getlist("job_ids")
     new_status = request.form.get("new_status", "")
     rejection_note = request.form.get("rejection_note", "").strip()
+    skip_timeline  = request.form.get("skip_timeline", "0") == "1"
     if job_ids and new_status and new_status in STATUSES:
         timeline_note = rejection_note if new_status == "rejected" and rejection_note else "Bulk status update"
         with get_db() as conn:
@@ -1824,11 +1854,12 @@ def bulk_update():
                             "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                             (new_status, jid),
                         )
-                        conn.execute(
-                            "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
-                            (jid, STATUS_LABELS.get(new_status, new_status),
-                             date.today().isoformat(), timeline_note),
-                        )
+                        if not skip_timeline:
+                            conn.execute(
+                                "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
+                                (jid, STATUS_LABELS.get(new_status, new_status),
+                                 date.today().isoformat(), timeline_note),
+                            )
                 except (ValueError, TypeError):
                     pass
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax"):

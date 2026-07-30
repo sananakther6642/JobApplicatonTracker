@@ -284,9 +284,11 @@ function onDrop(e, newStatus) {
   draggedJobId = null;
   draggedFromStatus = null;
 
-  // Non-blocking async status update
+  // Non-blocking async status update — skip_timeline=1 so Kanban drags
+  // don't pollute the timeline with every drag movement.
   const fd = new FormData();
   fd.append('new_status', newStatus);
+  fd.append('skip_timeline', '1');
   fetch(`/job/${jid}/quick-status`, { method: 'POST', body: fd })
     .then(r => r.json())
     .then(data => {
@@ -326,13 +328,13 @@ function returnToStack(e, jobId) {
   updateCount('applied');
   updateReturnButtons(card, 'applied');
 
-  const fd = new FormData();
-  fd.append('new_status', 'applied');
-  fetch(`/job/${jobId}/quick-status`, { method: 'POST', body: fd })
+  // Call reset-to-applied which resets status AND clears spurious
+  // Kanban stage entries from the timeline, leaving only the initial application.
+  fetch(`/job/${jobId}/reset-to-applied`, { method: 'POST' })
     .then(r => r.json())
     .then(data => {
-      if (data.ok) showSaveToast('↩ Returned to Applied stack');
-      else showSaveToast('⚠️ Failed to return', true);
+      if (data.ok) showSaveToast('↩ Reset to Applied — timeline cleaned');
+      else showSaveToast('⚠️ Failed to reset', true);
     }).catch(() => showSaveToast('⚠️ Network error', true));
 }
 
@@ -368,6 +370,7 @@ function resetKanbanBoard() {
   jobIds.forEach(id => fd.append('job_ids', id));
   fd.append('new_status', 'applied');
   fd.append('ajax', '1');
+  fd.append('skip_timeline', '1');  // Board reset should not spam timeline
 
   fetch('/bulk-update', { method: 'POST', body: fd })
     .then(r => r.json())
