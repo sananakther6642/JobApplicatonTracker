@@ -31,12 +31,13 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.after_request
 def no_cache_html(response):
-    """Prevent browser back/forward cache for HTML pages.
-    Without this, pressing Back after a Kanban status change shows
-    the old page from browser cache instead of fresh server data."""
+    """Prevent browser caching for HTML pages so stats and status updates are always 100% fresh."""
     if response.content_type and "text/html" in response.content_type:
-        response.headers["Cache-Control"] = "no-store"
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
+
 
 
 ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "txt"}
@@ -2427,18 +2428,19 @@ def stats():
             funnel_counts[s] = conn.execute(
                 "SELECT COUNT(*) FROM jobs WHERE status=?", (s,)
             ).fetchone()[0]
-        reached_interview = (
-            funnel_counts.get("phone_interview", 0) +
-            funnel_counts.get("technical_interview", 0) +
-            funnel_counts.get("final_interview", 0) +
-            funnel_counts.get("offer", 0) +
-            funnel_counts.get("rejected", 0)
-        )
+        reached_interview = conn.execute("""
+            SELECT COUNT(DISTINCT id) FROM jobs WHERE
+            status IN ('phone_interview', 'technical_interview', 'final_interview', 'offer')
+            OR (status = 'rejected' AND (rejection_reason IS NULL OR rejection_reason NOT LIKE 'Early rejection%'))
+            OR id IN (SELECT job_id FROM interview_rounds)
+            OR id IN (SELECT job_id FROM timeline WHERE event IN ('Phone Interview', 'Technical Interview', 'Final Interview', 'Screening'))
+        """).fetchone()[0]
         interview_to_offer = funnel_counts.get("offer", 0)
         interview_rate = round(reached_interview / total * 100, 1) if total else 0
         offer_from_interview = round(
             interview_to_offer / reached_interview * 100, 1
         ) if reached_interview else 0
+
 
         # Day-of-week stats
         dow_stats = conn.execute("""
