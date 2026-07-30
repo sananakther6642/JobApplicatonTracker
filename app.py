@@ -1209,7 +1209,7 @@ def edit_job(job_id):
                     job_id,
                 ),
             )
-            if old_status != new_status:
+            if old_status != new_status or request.form.get("status_note", "").strip():
                 conn.execute(
                     "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
                     (
@@ -1521,7 +1521,7 @@ def quick_status(job_id):
         old = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not old:
             return jsonify({"ok": False, "error": "Job not found"}), 404
-        if old["status"] != new_status:
+        if old["status"] != new_status or rejection_note or rejection_reason:
             conn.execute(
                 "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                 (new_status, job_id)
@@ -1904,7 +1904,7 @@ def bulk_update():
                     old = conn.execute(
                         "SELECT status FROM jobs WHERE id=?", (jid,)
                     ).fetchone()
-                    if old and old["status"] != new_status:
+                    if old and (old["status"] != new_status or rejection_note):
                         conn.execute(
                             "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                             (new_status, jid),
