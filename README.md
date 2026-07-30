@@ -76,12 +76,13 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
                                                           ↘ Archived 📦
 ```
 
-- **9 status stages + Archiving** with auto-logged timeline on every change
-- **Duplicate Detection** — live warning on job creation if company + role already exists
+- **9 status stages + Archiving** with auto-logged timeline on every status change
+- **Early vs. Post Rejection Breakdown** — interactive prompts classify rejections as `📭 Early Rejection` (no interview) or `❌ Post Rejection` (after interview) to keep conversion funnel metrics accurate
+- **Timeline Cleansing & Event Management** — auto-deduplication of drag-and-drop ping-pong events, plus per-event deletion (`🗑`) and one-click timeline cleaning (`🧹 Clean`)
 - **Priority Scoring (0–100)** — automatically computes job urgency based on stage, application age, interest, and follow-ups (`🔥 High`, `⚡ Med`, `Low`)
 - **Quick Notes** — inline editable notes directly on job list cards with instant auto-save
 - **Interview rounds** — notes, questions asked, outcome per round
-- **Prep checklist** — per-job checklist with progress bar
+- **Prep checklist** — per-job checklist with dynamic AJAX toggles, deletion, and progress bars
 - **Salary negotiation** — initial offer → counter → final, all tracked
 - **Documents & PDF Export** — upload CV, cover letter, assignments per job (auto-named) and export clean PDF snapshots for printing
 - **Contact book** — recruiters (name, email, phone, LinkedIn) auto-added when you save a job
@@ -89,7 +90,7 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 
 ### Find what you need instantly
 
-- **Live search** across company, role, JD, notes — filters as you type (debounced AJAX, no page reload) with result highlighting
+- **Live search & 100% Dynamic UI** — filters, stars (`★`), archives (`📦`), single/bulk deletes (`🗑`), and quick status dropdowns update in real-time via AJAX without page reloads
 - **Filter** by status, tag, starred, archived, source, date range
 - **Sort** by date, company, salary, interest score
 - **Tags** — comma-separated, filterable pills on every job
@@ -97,9 +98,9 @@ Applied → Screening → Phone Interview → Technical → Final → Offer ✓
 
 ### 🗂️ Drag-and-Drop Kanban & 📅 Interview Calendar
 
-- **Interactive Kanban Board (`/kanban`)** — drag-and-drop job cards across stage columns with instant status update
+- **Interactive Kanban Board (`/kanban`)** — drag-and-drop job cards across stage columns with instant status updates, rejection prompts, and return-to-stack actions
 - **Interview Calendar (`/calendar`)** — monthly grid and mobile list view displaying all scheduled interview dates
-- **Auto Dark/Light Mode** — auto-detects system `prefers-color-scheme` with manual toggle fallback
+- **Enhanced Dark Mode** — sleek Slate dark theme (`#0b0f19`) with translucent status badges, crisp typography, and system preference auto-detection
 - **Mobile-Responsive Layout** — optimized mobile layouts with responsive navigation menu
 
 ### ✨ Generate from JD
@@ -129,18 +130,19 @@ Upload your CV/cover letter PDFs alongside → interest score calculated from ke
 - **Next Actions list** — jobs with a pending action flagged at the top
 - **Activity feed** — most recent timeline events across all jobs
 - **Monthly chart** — bar chart of application volume per month (last 6 months)
-- **Funnel breakdown** — how many applications at each stage as a percentage
+- **Funnel breakdown** — live conversion stages including Early vs Post Rejections
 
 ### Stats worth looking at
 
 | Metric | What it shows |
 |--------|---------------|
 | Application Velocity | Weekly application count bar chart (last 12 weeks) |
+| Application Funnel | 1. Applied → Early Rejection (no interview) → 2. Interviewed → Post Rejection |
 | Source Conversion Funnel | Applied → Interview → Offer breakdown per source |
 | Response rate by source | Which job board actually yields responses |
-| Avg days to response | How long companies actually take |
+| Avg days to response | How long companies actually take (calculated from first response date) |
 | Interview funnel | Where you're dropping off |
-| Rejection breakdown | Why you're being rejected |
+| Rejection breakdown | Early vs Post rejection classification |
 | Day-of-week chart | When to apply for best response |
 | Salary breakdown | Salary ranges grouped by role and location |
 
