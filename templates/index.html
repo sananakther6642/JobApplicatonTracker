@@ -624,8 +624,9 @@ function confirmRejectIndex(stage) {
   const note = stage === 'early'
     ? 'Early rejection — application rejected before any interview'
     : 'Post rejection — rejected after screening/interview stage';
+  const cb = _rejectCallback;
   closeRejectModalIndex();
-  if (_rejectCallback) _rejectCallback(note);
+  if (cb) cb(note);
 }
 function interceptBulkReject(e) {
   if (e) e.preventDefault();

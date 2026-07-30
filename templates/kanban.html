@@ -441,8 +441,9 @@ function confirmRejectKanban(stage) {
   const note = stage === 'early'
     ? 'Early rejection — application rejected before any interview'
     : 'Post rejection — rejected after screening/interview stage';
+  const cb = _rejectKanbanCb;
   closeRejectModalKanban();
-  if (_rejectKanbanCb) _rejectKanbanCb(note);
+  if (cb) cb(note);
 }
 </script>
 
