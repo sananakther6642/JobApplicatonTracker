@@ -28,6 +28,17 @@ DB = os.path.join(APP_DIR, "jobs.db")
 UPLOAD_DIR = os.path.join(APP_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+@app.after_request
+def no_cache_html(response):
+    """Prevent browser back/forward cache for HTML pages.
+    Without this, pressing Back after a Kanban status change shows
+    the old page from browser cache instead of fresh server data."""
+    if response.content_type and "text/html" in response.content_type:
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "txt"}
 
 # The Generate page lets you attach a CV/cover letter before a job even
@@ -271,6 +282,12 @@ def init_db():
                 conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typedef}")
             except Exception:
                 pass  # Column already exists
+
+        # Add company_research column (Feature 7)
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN company_research TEXT DEFAULT ''")
+        except Exception:
+            pass
 
         # Add new columns to existing contacts table
         contact_new_cols = [
@@ -602,6 +619,23 @@ def dashboard():
         except (ValueError, TypeError):
             monthly_goal = None
 
+        # Mini heatmap: last 12 weeks for dashboard widget
+        heatmap_start = date.today() - timedelta(days=83)
+        heatmap_start = heatmap_start - timedelta(days=heatmap_start.weekday())  # align to Monday
+        heatmap_rows = conn.execute("""
+            SELECT applied_date, COUNT(*) as cnt
+            FROM jobs WHERE applied_date >= ? AND applied_date != ''
+            GROUP BY applied_date
+        """, (heatmap_start.isoformat(),)).fetchall()
+        heatmap_data = {row['applied_date']: row['cnt'] for row in heatmap_rows}
+        heatmap_weeks_mini = []
+        for w in range(12):
+            week = []
+            for d in range(7):
+                day = heatmap_start + timedelta(days=w * 7 + d)
+                week.append(day.isoformat())
+            heatmap_weeks_mini.append(week)
+
     offer_rate = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
     response_rate = round(
         (total - counts.get("applied", 0) - counts.get("ghosted", 0)) / total * 100, 1
@@ -642,6 +676,8 @@ def dashboard():
         monthly_goal=monthly_goal,
         this_month_count=this_month_count,
         kanban_priority=kanban_priority,
+        heatmap_data=heatmap_data,
+        heatmap_weeks_mini=heatmap_weeks_mini,
     )
 
 
@@ -1413,6 +1449,8 @@ def quick_status(job_id):
     new_status = request.form.get("new_status")
     if new_status not in STATUSES:
         abort(400)
+    rejection_reason = request.form.get("rejection_reason", "").strip()
+    rejection_note   = request.form.get("rejection_note", "").strip()
     with get_db() as conn:
         old = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not old:
@@ -1422,11 +1460,18 @@ def quick_status(job_id):
                 "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                 (new_status, job_id)
             )
+            # When rejecting, optionally save reason and add descriptive timeline note
+            if new_status == "rejected" and rejection_reason:
+                conn.execute(
+                    "UPDATE jobs SET rejection_reason=? WHERE id=?",
+                    (rejection_reason, job_id)
+                )
             conn.execute(
-                "INSERT INTO timeline (job_id, event, event_date) VALUES (?,?,date('now'))",
-                (job_id, STATUS_LABELS.get(new_status, new_status))
+                "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,date('now'),?)",
+                (job_id, STATUS_LABELS.get(new_status, new_status), rejection_note)
             )
     return jsonify({"ok": True, "status": new_status, "label": STATUS_LABELS.get(new_status, new_status)})
+
 
 
 # ---------------------------------------------------------------------------
