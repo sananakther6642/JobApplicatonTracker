@@ -271,19 +271,25 @@ function toggleAll(cb) {
 
 // Feature 10: star with toast
 function toggleStar(btn, jobId) {
-  const starred = btn.dataset.starred === '1';
-  const company = btn.dataset.company || '';
-  fetch(`/job/${jobId}/star`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'ajax=1'
-  }).then(r => r.json()).then(data => {
-    btn.textContent = data.starred ? '★' : '☆';
-    btn.dataset.starred = data.starred ? '1' : '0';
-    btn.title = data.starred ? 'Unstar' : 'Star';
-    const msg = data.starred ? `★ Starred ${company}` : `Unstarred ${company}`;
-    showToast(msg, null, 3000);
-  }).catch(() => showToast('Request failed — please reload', null, 4000));
+  const company = btn.dataset.company || 'Job';
+  fetch(`/job/${jobId}/star`, { method: 'POST' })
+    .then(r => r.json()).then(data => {
+      btn.textContent = data.starred ? '★' : '☆';
+      btn.dataset.starred = data.starred ? '1' : '0';
+      btn.title = data.starred ? 'Unstar' : 'Star';
+      btn.style.color = data.starred ? '#f59e0b' : 'var(--border2)';
+      const msg = data.starred ? `★ Starred ${company}` : `Unstarred ${company}`;
+      showToast(msg, null, 3000);
+      if (CURRENT_FILTERS && CURRENT_FILTERS.starred === '1' && !data.starred) {
+        const card = document.getElementById(`job-card-${jobId}`);
+        if (card) {
+          card.style.transition = 'opacity 0.2s, transform 0.2s';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.96)';
+          setTimeout(() => { card.remove(); applyFilters(false); }, 220);
+        }
+      }
+    }).catch(() => showToast('Request failed — please reload', null, 4000));
 }
 
 // Feature 2: undo delete with toast
@@ -304,7 +310,7 @@ function deleteJob(jobId, company) {
     if (deleted) return;
     deleted = true;
     fetch(`/job/${jobId}/delete`, { method: 'POST' })
-      .then(() => { card.remove(); updateBulkBar(); })
+      .then(() => { card.remove(); updateBulkBar(); applyFilters(false); })
       .catch(() => {
         card.style.opacity = '1';
         card.style.pointerEvents = '';
@@ -371,6 +377,7 @@ function bulkDelete() {
           if (card) card.remove();
         });
         updateBulkBar();
+        applyFilters(false);
       })
       .catch(() => {
         ids.forEach(id => {
@@ -490,6 +497,26 @@ function openStatusDropdown(e, badge) {
 
 function changeStatus(jobId, newStatus, badge, dropdown) {
   dropdown.remove();
+
+  const updateBadgeUI = (data) => {
+    badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
+    badge.style.cursor = 'pointer';
+    badge.style.position = 'relative';
+    badge.dataset.status = data.status;
+    badge.textContent = data.label;
+    badge.setAttribute('title', 'Click to change status');
+
+    if (CURRENT_FILTERS && CURRENT_FILTERS.status && CURRENT_FILTERS.status !== data.status) {
+      const card = document.getElementById(`job-card-${jobId}`);
+      if (card) {
+        card.style.transition = 'opacity 0.2s, transform 0.2s';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.96)';
+        setTimeout(() => { card.remove(); applyFilters(false); }, 220);
+      }
+    }
+  };
+
   if (newStatus === 'rejected') {
     // Show rejection stage modal before saving
     openRejectModal(function(note) {
@@ -499,16 +526,8 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: body.toString()
       }).then(r => r.json()).then(data => {
-        if (data.ok) {
-          badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
-          badge.style.cursor = 'pointer';
-          badge.style.position = 'relative';
-          badge.dataset.status = data.status;
-          badge.textContent = data.label;
-          badge.setAttribute('title', 'Click to change status');
-        } else {
-          showToast(data.error || 'Status update failed — please reload', null, 4000);
-        }
+        if (data.ok) updateBadgeUI(data);
+        else showToast(data.error || 'Status update failed — please reload', null, 4000);
       }).catch(() => showToast('Status update failed — please reload', null, 4000));
     });
     return;
@@ -519,16 +538,8 @@ function changeStatus(jobId, newStatus, badge, dropdown) {
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: body.toString()
   }).then(r => r.json()).then(data => {
-    if (data.ok) {
-      badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
-      badge.style.cursor = 'pointer';
-      badge.style.position = 'relative';
-      badge.dataset.status = data.status;
-      badge.textContent = data.label;
-      badge.setAttribute('title', 'Click to change status');
-    } else {
-      showToast(data.error || 'Status update failed — please reload', null, 4000);
-    }
+    if (data.ok) updateBadgeUI(data);
+    else showToast(data.error || 'Status update failed — please reload', null, 4000);
   }).catch(() => showToast('Status update failed — please reload', null, 4000));
 }
 
