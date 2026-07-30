@@ -284,6 +284,25 @@ function onDrop(e, newStatus) {
   draggedJobId = null;
   draggedFromStatus = null;
 
+  if (newStatus === 'rejected') {
+    openRejectModalKanban(function(note) {
+      const fd = new FormData();
+      fd.append('new_status', 'rejected');
+      fd.append('rejection_note', note);
+      fetch(`/job/${jid}/quick-status`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            showSaveToast(`✓ Saved: ${data.label}`);
+            updateReturnButtons(card, newStatus);
+          } else {
+            showSaveToast('⚠️ Status save error', true);
+          }
+        }).catch(() => showSaveToast('⚠️ Network error', true));
+    });
+    return;
+  }
+
   // Non-blocking async status update — skip_timeline=1 so Kanban drags
   // don't pollute the timeline with every drag movement.
   const fd = new FormData();
@@ -300,6 +319,7 @@ function onDrop(e, newStatus) {
       }
     }).catch(() => showSaveToast('⚠️ Network error', true));
 }
+
 
 function updateReturnButtons(card, status) {
   const btn = card.querySelector('.k-return-btn');
@@ -404,6 +424,62 @@ function showSaveToast(msg, isError) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.display = 'none'; }, 2000);
 }
+
+// Rejection Stage Modal (Kanban)
+let _rejectKanbanCb = null;
+function openRejectModalKanban(cb) {
+  _rejectKanbanCb = cb;
+  const m = document.getElementById('reject-modal-kanban');
+  if (m) m.style.display = 'flex';
+}
+function closeRejectModalKanban() {
+  const m = document.getElementById('reject-modal-kanban');
+  if (m) m.style.display = 'none';
+  _rejectKanbanCb = null;
+}
+function confirmRejectKanban(stage) {
+  const note = stage === 'early'
+    ? 'Early rejection — application rejected before any interview'
+    : 'Post rejection — rejected after screening/interview stage';
+  closeRejectModalKanban();
+  if (_rejectKanbanCb) _rejectKanbanCb(note);
+}
 </script>
 
+<!-- Rejection Stage Modal (Kanban) -->
+<div id="reject-modal-kanban" onclick="if(event.target===this)closeRejectModalKanban()"
+     style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);
+            align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:16px;padding:28px 32px;width:340px;
+              box-shadow:var(--shadow-lg);text-align:center">
+    <div style="font-size:22px;margin-bottom:10px">🚫</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">How were you rejected?</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:24px">This keeps your timeline accurate.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+      <button type="button" onclick="confirmRejectKanban('early')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--warn);background:var(--warn-light);color:var(--warn);
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">
+        <span style="font-size:20px">📭</span>
+        <div>
+          <div>Early Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected without any interview</div>
+        </div>
+      </button>
+      <button type="button" onclick="confirmRejectKanban('post')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--danger);background:var(--danger-light);color:var(--danger);
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">
+        <span style="font-size:20px">❌</span>
+        <div>
+          <div>Post Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected after interview / screening</div>
+        </div>
+      </button>
+    </div>
+    <button type="button" onclick="closeRejectModalKanban()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
+  </div>
+</div>
+
 {% endblock %}
+

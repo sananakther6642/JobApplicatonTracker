@@ -612,10 +612,12 @@ let _rejectCallback = null;
 
 function openRejectModal(callback) {
   _rejectCallback = callback;
-  document.getElementById('reject-modal-index').style.display = 'flex';
+  const m = document.getElementById('reject-modal-index');
+  if (m) m.style.display = 'flex';
 }
 function closeRejectModalIndex() {
-  document.getElementById('reject-modal-index').style.display = 'none';
+  const m = document.getElementById('reject-modal-index');
+  if (m) m.style.display = 'none';
   _rejectCallback = null;
 }
 function confirmRejectIndex(stage) {
@@ -639,13 +641,10 @@ function interceptBulkReject(e) {
     document.getElementById('bulk-form').submit();
   }
 }
-document.getElementById('reject-modal-index').addEventListener('click', function(e) {
-  if (e.target === this) closeRejectModalIndex();
-});
 </script>
 
 <!-- Rejection Stage Modal -->
-<div id="reject-modal-index"
+<div id="reject-modal-index" onclick="if(event.target===this)closeRejectModalIndex()"
      style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);
             align-items:center;justify-content:center">
   <div style="background:var(--white);border-radius:16px;padding:28px 32px;width:340px;
@@ -654,7 +653,7 @@ document.getElementById('reject-modal-index').addEventListener('click', function
     <div style="font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">How were you rejected?</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:24px">This keeps your timeline accurate.</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-      <button onclick="confirmRejectIndex('early')"
+      <button type="button" onclick="confirmRejectIndex('early')"
               style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
                      border:2px solid var(--warn);background:var(--warn-light);color:var(--warn);
                      cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px"
@@ -666,7 +665,7 @@ document.getElementById('reject-modal-index').addEventListener('click', function
           <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected without any interview</div>
         </div>
       </button>
-      <button onclick="confirmRejectIndex('post')"
+      <button type="button" onclick="confirmRejectIndex('post')"
               style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
                      border:2px solid var(--danger);background:var(--danger-light);color:var(--danger);
                      cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px"
@@ -679,7 +678,7 @@ document.getElementById('reject-modal-index').addEventListener('click', function
         </div>
       </button>
     </div>
-    <button onclick="closeRejectModalIndex()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
+    <button type="button" onclick="closeRejectModalIndex()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
   </div>
 </div>
 
