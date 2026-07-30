@@ -9,7 +9,7 @@ import shutil
 from flask import (Flask, render_template, request, redirect, url_for,
                    send_from_directory, abort, flash, make_response, jsonify)
 from werkzeug.utils import secure_filename
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 import sys
 import webbrowser
@@ -576,7 +576,6 @@ def dashboard():
             if d is None:
                 for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y"):
                     try:
-                        from datetime import datetime
                         d = datetime.strptime(raw_date, fmt).date()
                         break
                     except Exception:
@@ -1093,7 +1092,7 @@ def api_add_job():
 
     return {
         "id": job_id,
-        "url": f"http://localhost:5050/job/{job_id}",
+        "url": url_for("job_detail", job_id=job_id, _external=True),
         "duplicate_warning": duplicate,
     }, 201
 
@@ -1995,7 +1994,6 @@ def restore_db():
             flash("Please upload a valid .db file.", "error")
             return redirect(url_for("restore_db"))
         try:
-            import shutil
             backup_path = DB + ".bak"
             shutil.copy2(DB, backup_path)
             f.save(DB)
