@@ -113,9 +113,13 @@
   font-size:9px; padding:1px 5px; border-radius:99px;
   background:var(--accent-light); color:var(--accent); font-weight:600;
 }
-.kanban-empty {
-  text-align:center; padding:20px 8px; color:var(--text3); font-size:11px;
+.k-return-btn {
+  font-size: 10px; font-weight: 600; padding: 2px 6px;
+  border-radius: 6px; background: var(--bg2); color: var(--text2);
+  border: 1px solid var(--border); cursor: pointer;
+  transition: all 0.12s; margin-left: auto;
 }
+.k-return-btn:hover { background: var(--border2); color: var(--text); }
 .save-toast {
   position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
   background:var(--text); color:var(--bg);
@@ -127,7 +131,7 @@
 <div class="page-header">
   <h1>🗂️ Kanban Board</h1>
   <div style="display:flex;gap:8px;align-items:center">
-    <span style="font-size:12px;color:var(--text3)">Drag cards to update status</span>
+    <button type="button" onclick="resetKanbanBoard()" class="btn btn-secondary btn-sm" title="Reset all Kanban cards back to Applied stack">↺ Reset Board</button>
     <a href="{{ url_for('index') }}" class="btn btn-secondary btn-sm">List View</a>
     <a href="{{ url_for('calendar_view') }}" class="btn btn-secondary btn-sm">Calendar</a>
   </div>
@@ -174,6 +178,10 @@
             {% if job.interest_score %}
             <span style="font-size:9.5px;color:#f59e0b">{{ '★' * job.interest_score|int }}</span>
             {% endif %}
+            <button type="button" class="k-return-btn"
+                    style="{% if job.status == 'applied' %}display:none;{% endif %}"
+                    title="Return to Applied stack"
+                    onclick="returnToStack(event, {{ job.id }})">↩ Stack</button>
           </div>
           {% if tags %}
           <div class="k-tags">
@@ -284,9 +292,88 @@ function onDrop(e, newStatus) {
     .then(data => {
       if (data.ok) {
         showSaveToast(`✓ Saved: ${data.label}`);
+        updateReturnButtons(card, newStatus);
       } else {
         showSaveToast('⚠️ Status save error', true);
       }
+    }).catch(() => showSaveToast('⚠️ Network error', true));
+}
+
+function updateReturnButtons(card, status) {
+  const btn = card.querySelector('.k-return-btn');
+  if (btn) {
+    btn.style.display = status === 'applied' ? 'none' : 'inline-block';
+  }
+}
+
+function returnToStack(e, jobId) {
+  e.stopPropagation();
+  const card = document.querySelector(`.kanban-card[data-job-id="${jobId}"]`);
+  if (!card) return;
+  const fromStatus = card.dataset.status;
+  if (fromStatus === 'applied') return;
+
+  const zone = document.getElementById('zone-applied');
+  if (!zone) return;
+
+  const empty = zone.querySelector('.kanban-empty');
+  if (empty) empty.remove();
+
+  card.dataset.status = 'applied';
+  zone.insertBefore(card, zone.firstChild);
+
+  updateCount(fromStatus);
+  updateCount('applied');
+  updateReturnButtons(card, 'applied');
+
+  const fd = new FormData();
+  fd.append('new_status', 'applied');
+  fetch(`/job/${jobId}/quick-status`, { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) showSaveToast('↩ Returned to Applied stack');
+      else showSaveToast('⚠️ Failed to return', true);
+    }).catch(() => showSaveToast('⚠️ Network error', true));
+}
+
+function resetKanbanBoard() {
+  const cards = document.querySelectorAll('.kanban-card:not([data-status="applied"])');
+  if (!cards.length) {
+    showSaveToast('Board is already reset!');
+    return;
+  }
+  if (!confirm(`Reset ${cards.length} card(s) back to the Applied stack?`)) return;
+
+  const zone = document.getElementById('zone-applied');
+  if (!zone) return;
+
+  const empty = zone.querySelector('.kanban-empty');
+  if (empty) empty.remove();
+
+  const affectedStatuses = new Set();
+  const jobIds = [];
+
+  cards.forEach(card => {
+    affectedStatuses.add(card.dataset.status);
+    jobIds.push(card.dataset.jobId);
+    card.dataset.status = 'applied';
+    zone.insertBefore(card, zone.firstChild);
+    updateReturnButtons(card, 'applied');
+  });
+
+  affectedStatuses.forEach(s => updateCount(s));
+  updateCount('applied');
+
+  const fd = new FormData();
+  jobIds.forEach(id => fd.append('job_ids', id));
+  fd.append('new_status', 'applied');
+  fd.append('ajax', '1');
+
+  fetch('/bulk-update', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) showSaveToast('✓ Board reset to Applied stack');
+      else showSaveToast('⚠️ Reset failed', true);
     }).catch(() => showSaveToast('⚠️ Network error', true));
 }
 

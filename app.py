@@ -1785,6 +1785,8 @@ def bulk_update():
                         )
                 except (ValueError, TypeError):
                     pass
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax"):
+        return jsonify({"ok": True})
     return redirect(url_for("index"))
 
 
