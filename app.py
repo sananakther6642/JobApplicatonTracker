@@ -299,6 +299,15 @@ def init_db():
             except Exception:
                 pass  # Column already exists
 
+        # Clean existing timeline entries across all jobs
+        try:
+            jobs = conn.execute("SELECT id FROM jobs").fetchall()
+            for j in jobs:
+                clean_timeline_for_job(conn, j["id"])
+        except Exception:
+            pass
+
+
 
 STATUSES = [
     "applied", "screening", "phone_interview",
@@ -1318,6 +1327,45 @@ def delete_doc(doc_id):
 # Timeline events
 # ---------------------------------------------------------------------------
 
+def clean_timeline_for_job(conn, job_id):
+    job = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return
+    status = job["status"]
+    timeline = conn.execute(
+        "SELECT id, event, event_date, notes FROM timeline WHERE job_id=? ORDER BY id ASC",
+        (job_id,)
+    ).fetchall()
+    if not timeline:
+        return
+
+    to_delete = set()
+    if status == "applied":
+        first_applied_id = None
+        for item in timeline:
+            if item["event"] == "Applied" and first_applied_id is None:
+                first_applied_id = item["id"]
+            elif first_applied_id is not None:
+                to_delete.add(item["id"])
+    else:
+        first_applied = False
+        prev_event = None
+        for item in timeline:
+            ev = item["event"]
+            tid = item["id"]
+            if ev == "Applied":
+                if first_applied:
+                    to_delete.add(tid)
+                else:
+                    first_applied = True
+            elif ev == prev_event:
+                to_delete.add(tid)
+            prev_event = ev
+
+    for tid in to_delete:
+        conn.execute("DELETE FROM timeline WHERE id=?", (tid,))
+
+
 @app.route("/job/<int:job_id>/add_event", methods=["POST"])
 def add_event(job_id):
     with get_db() as conn:
@@ -1334,6 +1382,23 @@ def add_event(job_id):
             ),
         )
     return redirect(url_for("job_detail", job_id=job_id))
+
+
+@app.route("/job/<int:job_id>/timeline/<int:event_id>/delete", methods=["POST"])
+def delete_timeline_event(job_id, event_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM timeline WHERE id=? AND job_id=?", (event_id, job_id))
+    flash("Timeline entry deleted.", "success")
+    return redirect(url_for("job_detail", job_id=job_id))
+
+
+@app.route("/job/<int:job_id>/clean-timeline", methods=["POST"])
+def clean_job_timeline(job_id):
+    with get_db() as conn:
+        clean_timeline_for_job(conn, job_id)
+    flash("Timeline cleaned up!", "success")
+    return redirect(url_for("job_detail", job_id=job_id))
+
 
 
 @app.route("/api/timeline", methods=["POST"])
@@ -1476,29 +1541,19 @@ def quick_status(job_id):
 
 @app.route("/job/<int:job_id>/reset-to-applied", methods=["POST"])
 def reset_to_applied(job_id):
-    """Reset a job to Applied status and clean up spurious Kanban stage
+    """Reset a job to Applied status and clean up spurious stage
     entries from the timeline, keeping only the original initial application."""
     with get_db() as conn:
         job = conn.execute("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return jsonify({"ok": False, "error": "Not found"}), 404
-        # Reset status
         conn.execute(
             "UPDATE jobs SET status='applied', updated_at=datetime('now') WHERE id=?",
             (job_id,)
         )
-        # Keep only the very first timeline entry (initial application),
-        # delete everything after it (all the Kanban-drag stage noise).
-        first = conn.execute(
-            "SELECT id FROM timeline WHERE job_id=? ORDER BY id ASC LIMIT 1",
-            (job_id,)
-        ).fetchone()
-        if first:
-            conn.execute(
-                "DELETE FROM timeline WHERE job_id=? AND id > ?",
-                (job_id, first["id"])
-            )
+        clean_timeline_for_job(conn, job_id)
     return jsonify({"ok": True})
+
 
 
 

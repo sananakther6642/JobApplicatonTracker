@@ -391,15 +391,31 @@
     {% endif %}
 
     <div class="card" style="padding:20px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:16px">Timeline</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3)">Timeline</div>
+        {% if timeline|length > 1 %}
+        <form method="post" action="{{ url_for('clean_job_timeline', job_id=job.id) }}" style="margin:0">
+          <button type="submit" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 8px" title="Clean up duplicate and reset entries">🧹 Clean</button>
+        </form>
+        {% endif %}
+      </div>
 
       {% if timeline %}
       <ul class="timeline" style="margin-bottom:20px">
         {% for event in timeline %}
-        <li>
-          <div class="t-date">{{ event.event_date or '' }}</div>
-          <div class="t-event">{{ event.event }}</div>
-          {% if event.notes %}<div class="t-note">{{ event.notes }}</div>{% endif %}
+        <li style="position:relative">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+            <div>
+              <div class="t-date">{{ event.event_date or '' }}</div>
+              <div class="t-event">{{ event.event }}</div>
+              {% if event.notes %}<div class="t-note">{{ event.notes }}</div>{% endif %}
+            </div>
+            {% if timeline|length > 1 %}
+            <form method="post" action="{{ url_for('delete_timeline_event', job_id=job.id, event_id=event.id) }}" style="margin:0" onsubmit="return confirm('Delete this timeline item?')">
+              <button type="submit" style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:12px;padding:0 2px" title="Delete item">🗑</button>
+            </form>
+            {% endif %}
+          </div>
         </li>
         {% endfor %}
       </ul>
