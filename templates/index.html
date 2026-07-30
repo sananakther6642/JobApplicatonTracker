@@ -628,18 +628,43 @@ function confirmRejectIndex(stage) {
   if (_rejectCallback) _rejectCallback(note);
 }
 function interceptBulkReject(e) {
-  const sel = document.querySelector('#bulk-form select[name="new_status"]');
-  if (sel && sel.value === 'rejected') {
+  if (e) e.preventDefault();
+  const checked = [...document.querySelectorAll('.job-cb:checked')].map(c => c.value);
+  if (!checked.length) {
+    showToast('Please select at least one job first', null, 3000);
+    return;
+  }
+  const form = document.getElementById('bulk-form');
+  const sel = form ? form.querySelector('select[name="new_status"]') : null;
+  const newStatus = sel ? sel.value : '';
+
+  if (newStatus === 'rejected') {
     openRejectModal(function(note) {
-      // Add hidden rejection_note field and submit
-      const hidden = document.createElement('input');
-      hidden.type = 'hidden'; hidden.name = 'rejection_note'; hidden.value = note;
-      document.getElementById('bulk-form').appendChild(hidden);
-      document.getElementById('bulk-form').submit();
+      submitBulkUpdate(checked, newStatus, note);
     });
   } else {
-    document.getElementById('bulk-form').submit();
+    submitBulkUpdate(checked, newStatus, '');
   }
+}
+
+function submitBulkUpdate(jobIds, newStatus, rejectionNote) {
+  const fd = new FormData();
+  jobIds.forEach(id => fd.append('job_ids', id));
+  fd.append('new_status', newStatus);
+  if (rejectionNote) fd.append('rejection_note', rejectionNote);
+  fd.append('ajax', '1');
+
+  fetch('{{ url_for("bulk_update") }}', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        showToast(`Updated ${jobIds.length} job(s) to ${newStatus}`, null, 3000);
+        setTimeout(() => location.reload(), 350);
+      } else {
+        showToast('Bulk update failed', null, 4000);
+      }
+    })
+    .catch(() => showToast('Network error during bulk update', null, 4000));
 }
 </script>
 

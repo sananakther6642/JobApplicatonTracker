@@ -1909,6 +1909,11 @@ def bulk_update():
                             "UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?",
                             (new_status, jid),
                         )
+                        if new_status == "rejected" and rejection_note:
+                            conn.execute(
+                                "UPDATE jobs SET rejection_reason=? WHERE id=?",
+                                (rejection_note, jid),
+                            )
                         if not skip_timeline:
                             conn.execute(
                                 "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
