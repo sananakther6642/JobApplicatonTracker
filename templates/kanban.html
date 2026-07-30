@@ -226,45 +226,41 @@
 <div id="reject-modal" onclick="if(event.target===this)closeRejectModal()"
      style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);
             align-items:center;justify-content:center">
-  <div style="background:var(--white);border-radius:16px;padding:26px 28px;width:380px;
-              box-shadow:var(--shadow-lg);position:relative">
-    <div style="font-size:15px;font-weight:800;margin-bottom:6px;color:var(--danger)">✗ Mark as Rejected</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:20px">Choose what stage the rejection happened at so your timeline stays accurate.</div>
+  <div style="background:var(--white);border-radius:16px;padding:28px 32px;width:340px;
+              box-shadow:var(--shadow-lg);text-align:center">
+    <div style="font-size:22px;margin-bottom:10px">🚫</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">How were you rejected?</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:24px">This keeps your timeline accurate.</div>
 
-    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:10px">When were you rejected?</div>
-    <label class="reject-stage-option">
-      <input type="radio" name="reject_stage" value="early" checked>
-      <div>
-        <div style="font-weight:700">Early rejection — no interview</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">They rejected your application before scheduling any interview</div>
-      </div>
-    </label>
-    <label class="reject-stage-option">
-      <input type="radio" name="reject_stage" value="interview">
-      <div>
-        <div style="font-weight:700">After screening / interview stage</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:1px">You had at least one interview or screening call</div>
-      </div>
-    </label>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+      <button onclick="confirmReject('early')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--warn);background:var(--warn-light);color:var(--warn);
+                     cursor:pointer;transition:all .12s;text-align:left;display:flex;align-items:center;gap:12px"
+              onmouseover="this.style.background='var(--warn)';this.style.color='#fff'"
+              onmouseout="this.style.background='var(--warn-light)';this.style.color='var(--warn)'">
+        <span style="font-size:20px">📭</span>
+        <div>
+          <div>Early Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected without any interview</div>
+        </div>
+      </button>
 
-    <div style="margin:18px 0 20px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">Reason <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
-      <select id="reject-reason-sel" class="form-input" style="font-size:13px">
-        <option value="">— Select reason —</option>
-        <option>No response</option>
-        <option>Salary mismatch</option>
-        <option>Skills gap</option>
-        <option>Overqualified</option>
-        <option>Position filled</option>
-        <option>Culture fit</option>
-        <option>Other</option>
-      </select>
+      <button onclick="confirmReject('post')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--danger);background:var(--danger-light);color:var(--danger);
+                     cursor:pointer;transition:all .12s;text-align:left;display:flex;align-items:center;gap:12px"
+              onmouseover="this.style.background='var(--danger)';this.style.color='#fff'"
+              onmouseout="this.style.background='var(--danger-light)';this.style.color='var(--danger)'">
+        <span style="font-size:20px">❌</span>
+        <div>
+          <div>Post Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected after interview / screening</div>
+        </div>
+      </button>
     </div>
 
-    <div style="display:flex;gap:8px">
-      <button onclick="confirmReject()" class="btn btn-danger" style="flex:1;font-weight:700">✗ Confirm Reject</button>
-      <button onclick="closeRejectModal()" class="btn btn-secondary">Cancel</button>
-    </div>
+    <button onclick="closeRejectModal()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
   </div>
 </div>
 
@@ -385,15 +381,13 @@ function closeRejectModal() {
   _rejectFromStatus = null;
 }
 
-function confirmReject() {
+function confirmReject(stage) {
   if (!_rejectJobId) return;
   const jobId = _rejectJobId;
   const fromStatus = _rejectFromStatus;
-  const stage  = document.querySelector('input[name="reject_stage"]:checked').value;
-  const reason = document.getElementById('reject-reason-sel').value;
-  const note   = stage === 'early'
+  const note = stage === 'early'
     ? 'Early rejection — application rejected before any interview'
-    : 'Rejected after screening/interview stage';
+    : 'Post rejection — rejected after screening/interview stage';
   closeRejectModal();
 
   const card = document.querySelector(`.kanban-card[data-job-id="${jobId}"]`);
@@ -407,7 +401,6 @@ function confirmReject() {
 
   const fd = new FormData();
   fd.append('new_status', 'rejected');
-  if (reason) fd.append('rejection_reason', reason);
   fd.append('rejection_note', note);
 
   fetch(`/job/${jobId}/quick-status`, { method: 'POST', body: fd })
@@ -417,7 +410,7 @@ function confirmReject() {
         setTimeout(() => {
           card.remove();
           if (fromStatus) updateCount(fromStatus);
-          showSaveToast(`✗ Rejected — ${stage === 'early' ? 'no interview' : 'after interview'}`);
+          showSaveToast(`${stage === 'early' ? '📭 Early Rejection' : '❌ Post Rejection'} saved`);
         }, 260);
       } else {
         card.style.opacity = '';
