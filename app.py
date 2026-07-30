@@ -646,10 +646,21 @@ def dashboard():
                 week.append(day.isoformat())
             heatmap_weeks_mini.append(week)
 
+        reached_interview = conn.execute("""
+            SELECT COUNT(DISTINCT id) FROM jobs WHERE
+            status IN ('phone_interview', 'technical_interview', 'final_interview', 'offer')
+            OR (status = 'rejected' AND (rejection_reason IS NULL OR rejection_reason NOT LIKE 'Early rejection%'))
+            OR id IN (SELECT job_id FROM interview_rounds)
+            OR id IN (SELECT job_id FROM timeline WHERE event IN ('Phone Interview', 'Technical Interview', 'Final Interview', 'Screening'))
+        """).fetchone()[0]
+
+        early_rejections = conn.execute("""
+            SELECT COUNT(*) FROM jobs 
+            WHERE status='rejected' AND (rejection_reason LIKE 'Early rejection%' OR rejection_reason LIKE 'Early%')
+        """).fetchone()[0]
+
     offer_rate = round(counts.get("offer", 0) / total * 100, 1) if total > 0 else 0
-    response_rate = round(
-        (total - counts.get("applied", 0) - counts.get("ghosted", 0)) / total * 100, 1
-    ) if total > 0 else 0
+    response_rate = round(reached_interview / total * 100, 1) if total > 0 else 0
 
     # Priority score for kanban cards
     today_d = date.today()
@@ -663,6 +674,7 @@ def dashboard():
                     (j.get("follow_up_date") or "").strip() <= today]
 
     return render_template(
+
         "dashboard.html",
         total=total,
         counts=counts,
@@ -676,6 +688,8 @@ def dashboard():
         funnel=funnel,
         offer_rate=offer_rate,
         response_rate=response_rate,
+        reached_interview=reached_interview,
+        early_rejections=early_rejections,
         status_labels=STATUS_LABELS,
         status_colors=STATUS_COLORS,
         today=today,
