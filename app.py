@@ -2527,6 +2527,16 @@ def stats():
             week.append(day.isoformat())
         heatmap_weeks.append(week)
 
+        # Rejection breakdown: Early vs Post
+        early_rejections = conn.execute("""
+            SELECT COUNT(*) FROM jobs 
+            WHERE status='rejected' AND (rejection_reason LIKE 'Early rejection%' OR rejection_reason LIKE 'Early%')
+        """).fetchone()[0]
+        total_rejected = funnel_counts.get("rejected", 0)
+        post_rejections = max(0, total_rejected - early_rejections)
+        early_reject_rate = round(early_rejections / total * 100, 1) if total else 0
+        post_reject_rate = round(post_rejections / reached_interview * 100, 1) if reached_interview else 0
+
     return render_template(
         "stats.html",
         total=total,
@@ -2545,6 +2555,10 @@ def stats():
         interview_rate=interview_rate,
         offer_from_interview=offer_from_interview,
         reached_interview=reached_interview,
+        early_rejections=early_rejections,
+        post_rejections=post_rejections,
+        early_reject_rate=early_reject_rate,
+        post_reject_rate=post_reject_rate,
         dow_stats=dow_stats,
         rejection_breakdown=rejection_breakdown,
         weekly_velocity=weekly_velocity,
