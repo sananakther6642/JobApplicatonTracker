@@ -2675,6 +2675,25 @@ def edit_contact(contact_id):
 init_db()
 
 if __name__ == "__main__":
+    import socket
+
+    def get_local_ip():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
+    local_ip = get_local_ip()
+    print("\n===================================================")
+    print("  Job Application Tracker (JAT)")
+    print("  Laptop Access:     http://localhost:5050")
+    print(f"  Phone / Wi-Fi URL: http://{local_ip}:5050")
+    print("===================================================\n")
+
     if getattr(sys, 'frozen', False) or os.environ.get("AUTO_OPEN_BROWSER", "0") == "1":
         def _open_browser():
             time.sleep(1.2)
@@ -2682,4 +2701,5 @@ if __name__ == "__main__":
         threading.Thread(target=_open_browser, daemon=True).start()
 
     is_frozen = getattr(sys, 'frozen', False)
-    app.run(debug=not is_frozen, port=5050, threaded=True)
+    app.run(host="0.0.0.0", debug=not is_frozen, port=5050, threaded=True)
+
