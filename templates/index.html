@@ -200,7 +200,8 @@ const STATUS_CLASS_MAP = {
       <option value="{{ s }}">→ {{ status_labels[s] }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="btn btn-primary btn-sm" id="bulk-submit-btn">Update jobs</button>
+    <button type="button" class="btn btn-primary btn-sm" id="bulk-submit-btn"
+            onclick="interceptBulkReject(event)">Update jobs</button>
     <button type="button" class="btn btn-danger btn-sm" id="bulk-delete-btn" onclick="bulkDelete()">🗑 Delete selected</button>
   </div>
 </form>
@@ -485,6 +486,29 @@ function openStatusDropdown(e, badge) {
 
 function changeStatus(jobId, newStatus, badge, dropdown) {
   dropdown.remove();
+  if (newStatus === 'rejected') {
+    // Show rejection stage modal before saving
+    openRejectModal(function(note) {
+      const body = new URLSearchParams({ new_status: newStatus, rejection_note: note });
+      fetch(`/job/${jobId}/quick-status`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body.toString()
+      }).then(r => r.json()).then(data => {
+        if (data.ok) {
+          badge.className = 'badge ' + (STATUS_CLASS_MAP[data.status] || '') + ' status-badge';
+          badge.style.cursor = 'pointer';
+          badge.style.position = 'relative';
+          badge.dataset.status = data.status;
+          badge.textContent = data.label;
+          badge.setAttribute('title', 'Click to change status');
+        } else {
+          showToast(data.error || 'Status update failed — please reload', null, 4000);
+        }
+      }).catch(() => showToast('Status update failed — please reload', null, 4000));
+    });
+    return;
+  }
   const body = new URLSearchParams({ new_status: newStatus });
   fetch(`/job/${jobId}/quick-status`, {
     method: 'POST',
@@ -580,6 +604,83 @@ document.getElementById('filter-form').addEventListener('submit', (e) => {
 });
 // Support browser back/forward through live-searched states.
 window.addEventListener('popstate', () => location.reload());
+
+// ---------------------------------------------------------------------------
+// Rejection stage modal (Early / Post)
+// ---------------------------------------------------------------------------
+let _rejectCallback = null;
+
+function openRejectModal(callback) {
+  _rejectCallback = callback;
+  document.getElementById('reject-modal-index').style.display = 'flex';
+}
+function closeRejectModalIndex() {
+  document.getElementById('reject-modal-index').style.display = 'none';
+  _rejectCallback = null;
+}
+function confirmRejectIndex(stage) {
+  const note = stage === 'early'
+    ? 'Early rejection — application rejected before any interview'
+    : 'Post rejection — rejected after screening/interview stage';
+  closeRejectModalIndex();
+  if (_rejectCallback) _rejectCallback(note);
+}
+function interceptBulkReject(e) {
+  const sel = document.querySelector('#bulk-form select[name="new_status"]');
+  if (sel && sel.value === 'rejected') {
+    openRejectModal(function(note) {
+      // Add hidden rejection_note field and submit
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden'; hidden.name = 'rejection_note'; hidden.value = note;
+      document.getElementById('bulk-form').appendChild(hidden);
+      document.getElementById('bulk-form').submit();
+    });
+  } else {
+    document.getElementById('bulk-form').submit();
+  }
+}
+document.getElementById('reject-modal-index').addEventListener('click', function(e) {
+  if (e.target === this) closeRejectModalIndex();
+});
 </script>
+
+<!-- Rejection Stage Modal -->
+<div id="reject-modal-index"
+     style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);
+            align-items:center;justify-content:center">
+  <div style="background:var(--white);border-radius:16px;padding:28px 32px;width:340px;
+              box-shadow:var(--shadow-lg);text-align:center">
+    <div style="font-size:22px;margin-bottom:10px">🚫</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">How were you rejected?</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:24px">This keeps your timeline accurate.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+      <button onclick="confirmRejectIndex('early')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--warn);background:var(--warn-light);color:var(--warn);
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px"
+              onmouseover="this.style.background='var(--warn)';this.style.color='#fff'"
+              onmouseout="this.style.background='var(--warn-light)';this.style.color='var(--warn)'">
+        <span style="font-size:20px">📭</span>
+        <div>
+          <div>Early Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected without any interview</div>
+        </div>
+      </button>
+      <button onclick="confirmRejectIndex('post')"
+              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
+                     border:2px solid var(--danger);background:var(--danger-light);color:var(--danger);
+                     cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px"
+              onmouseover="this.style.background='var(--danger)';this.style.color='#fff'"
+              onmouseout="this.style.background='var(--danger-light)';this.style.color='var(--danger)'">
+        <span style="font-size:20px">❌</span>
+        <div>
+          <div>Post Rejection</div>
+          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected after interview / screening</div>
+        </div>
+      </button>
+    </div>
+    <button onclick="closeRejectModalIndex()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
+  </div>
+</div>
 
 {% endblock %}

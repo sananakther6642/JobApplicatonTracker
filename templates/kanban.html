@@ -120,23 +120,6 @@
   transition: all 0.12s; margin-left: auto;
 }
 .k-return-btn:hover { background: var(--border2); color: var(--text); }
-.k-reject-btn {
-  font-size: 10px; font-weight: 600; padding: 2px 6px;
-  border-radius: 6px; background: var(--danger-light); color: var(--danger);
-  border: 1px solid rgba(225,29,72,.18); cursor: pointer;
-  transition: all 0.12s;
-}
-.k-reject-btn:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
-.reject-stage-option {
-  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
-  border-radius: 9px; cursor: pointer; border: 1.5px solid var(--border);
-  margin-bottom: 7px; font-size: 13px; font-weight: 500; color: var(--text);
-  transition: all .12s; line-height: 1.4;
-}
-.reject-stage-option:has(input:checked) {
-  border-color: var(--danger); background: var(--danger-light); color: var(--danger);
-}
-.reject-stage-option input[type="radio"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--danger); }
 .save-toast {
   position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
   background:var(--text); color:var(--bg);
@@ -199,9 +182,6 @@
                     style="{% if job.status == 'applied' %}display:none;{% endif %}"
                     title="Return to Applied stack"
                     onclick="returnToStack(event, {{ job.id }})">↩ Stack</button>
-            <button type="button" class="k-reject-btn"
-                    title="Mark as Rejected"
-                    onclick="rejectCard(event, {{ job.id }})">✗ Reject</button>
           </div>
           {% if tags %}
           <div class="k-tags">
@@ -222,55 +202,11 @@
 
 <div class="save-toast" id="save-toast"></div>
 
-<!-- Rejection Modal -->
-<div id="reject-modal" onclick="if(event.target===this)closeRejectModal()"
-     style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.45);
-            align-items:center;justify-content:center">
-  <div style="background:var(--white);border-radius:16px;padding:28px 32px;width:340px;
-              box-shadow:var(--shadow-lg);text-align:center">
-    <div style="font-size:22px;margin-bottom:10px">🚫</div>
-    <div style="font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">How were you rejected?</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:24px">This keeps your timeline accurate.</div>
-
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-      <button onclick="confirmReject('early')"
-              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
-                     border:2px solid var(--warn);background:var(--warn-light);color:var(--warn);
-                     cursor:pointer;transition:all .12s;text-align:left;display:flex;align-items:center;gap:12px"
-              onmouseover="this.style.background='var(--warn)';this.style.color='#fff'"
-              onmouseout="this.style.background='var(--warn-light)';this.style.color='var(--warn)'">
-        <span style="font-size:20px">📭</span>
-        <div>
-          <div>Early Rejection</div>
-          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected without any interview</div>
-        </div>
-      </button>
-
-      <button onclick="confirmReject('post')"
-              style="padding:14px 20px;border-radius:10px;font-size:14px;font-weight:700;
-                     border:2px solid var(--danger);background:var(--danger-light);color:var(--danger);
-                     cursor:pointer;transition:all .12s;text-align:left;display:flex;align-items:center;gap:12px"
-              onmouseover="this.style.background='var(--danger)';this.style.color='#fff'"
-              onmouseout="this.style.background='var(--danger-light)';this.style.color='var(--danger)'">
-        <span style="font-size:20px">❌</span>
-        <div>
-          <div>Post Rejection</div>
-          <div style="font-size:11px;font-weight:400;opacity:.8;margin-top:1px">Rejected after interview / screening</div>
-        </div>
-      </button>
-    </div>
-
-    <button onclick="closeRejectModal()" class="btn btn-secondary" style="width:100%;font-size:12px">Cancel</button>
-  </div>
-</div>
-
 <script>
 let draggedCard = null;
 let draggedJobId = null;
 let draggedFromStatus = null;
 window._dragMoved = false;
-let _rejectJobId = null;
-let _rejectFromStatus = null;
 
 function onDragStart(e) {
   draggedCard = e.currentTarget;
@@ -361,69 +297,6 @@ function onDrop(e, newStatus) {
         showSaveToast('⚠️ Status save error', true);
       }
     }).catch(() => showSaveToast('⚠️ Network error', true));
-}
-
-function rejectCard(e, jobId) {
-  e.stopPropagation();
-  _rejectJobId = jobId;
-  const card = document.querySelector(`.kanban-card[data-job-id="${jobId}"]`);
-  _rejectFromStatus = card ? card.dataset.status : null;
-  // Reset modal state
-  document.querySelector('input[name="reject_stage"][value="early"]').checked = true;
-  document.getElementById('reject-reason-sel').value = '';
-  const m = document.getElementById('reject-modal');
-  m.style.display = 'flex';
-}
-
-function closeRejectModal() {
-  document.getElementById('reject-modal').style.display = 'none';
-  _rejectJobId = null;
-  _rejectFromStatus = null;
-}
-
-function confirmReject(stage) {
-  if (!_rejectJobId) return;
-  const jobId = _rejectJobId;
-  const fromStatus = _rejectFromStatus;
-  const note = stage === 'early'
-    ? 'Early rejection — application rejected before any interview'
-    : 'Post rejection — rejected after screening/interview stage';
-  closeRejectModal();
-
-  const card = document.querySelector(`.kanban-card[data-job-id="${jobId}"]`);
-  if (!card) return;
-
-  // Animate card out
-  card.style.transition = 'opacity .25s, transform .25s';
-  card.style.opacity = '0';
-  card.style.transform = 'scale(0.88)';
-  card.style.pointerEvents = 'none';
-
-  const fd = new FormData();
-  fd.append('new_status', 'rejected');
-  fd.append('rejection_note', note);
-
-  fetch(`/job/${jobId}/quick-status`, { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(data => {
-      if (data.ok) {
-        setTimeout(() => {
-          card.remove();
-          if (fromStatus) updateCount(fromStatus);
-          showSaveToast(`${stage === 'early' ? '📭 Early Rejection' : '❌ Post Rejection'} saved`);
-        }, 260);
-      } else {
-        card.style.opacity = '';
-        card.style.transform = '';
-        card.style.pointerEvents = '';
-        showSaveToast('⚠️ Failed to save rejection', true);
-      }
-    }).catch(() => {
-      card.style.opacity = '';
-      card.style.transform = '';
-      card.style.pointerEvents = '';
-      showSaveToast('⚠️ Network error', true);
-    });
 }
 
 function updateReturnButtons(card, status) {

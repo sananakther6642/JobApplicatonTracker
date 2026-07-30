@@ -1809,7 +1809,9 @@ def kanban_view():
 def bulk_update():
     job_ids = request.form.getlist("job_ids")
     new_status = request.form.get("new_status", "")
+    rejection_note = request.form.get("rejection_note", "").strip()
     if job_ids and new_status and new_status in STATUSES:
+        timeline_note = rejection_note if new_status == "rejected" and rejection_note else "Bulk status update"
         with get_db() as conn:
             for jid in job_ids:
                 try:
@@ -1825,13 +1827,14 @@ def bulk_update():
                         conn.execute(
                             "INSERT INTO timeline (job_id, event, event_date, notes) VALUES (?,?,?,?)",
                             (jid, STATUS_LABELS.get(new_status, new_status),
-                             date.today().isoformat(), "Bulk status update"),
+                             date.today().isoformat(), timeline_note),
                         )
                 except (ValueError, TypeError):
                     pass
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.form.get("ajax"):
         return jsonify({"ok": True})
     return redirect(url_for("index"))
+
 
 
 # ---------------------------------------------------------------------------
