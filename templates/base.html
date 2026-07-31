@@ -11,7 +11,13 @@
     if (saved && (saved === 'dark' || saved === 'light')) return saved;
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
-    var hour = new Date().getHours();
+    var hour;
+    try {
+      var formatter = new Intl.DateTimeFormat([], { hour: 'numeric', hourCycle: 'h23' });
+      hour = parseInt(formatter.format(new Date()), 10);
+    } catch (e) {
+      hour = new Date().getHours();
+    }
     return (hour >= 19 || hour < 7) ? 'dark' : 'light';
   }
   document.documentElement.setAttribute('data-theme', getAutoTheme());
@@ -542,7 +548,13 @@ function getAutoTheme() {
   if (saved && (saved === 'dark' || saved === 'light')) return saved;
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
   if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
-  const hour = new Date().getHours();
+  let hour;
+  try {
+    const formatter = new Intl.DateTimeFormat([], { hour: 'numeric', hourCycle: 'h23' });
+    hour = parseInt(formatter.format(new Date()), 10);
+  } catch (e) {
+    hour = new Date().getHours();
+  }
   return (hour >= 19 || hour < 7) ? 'dark' : 'light';
 }
 
