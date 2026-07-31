@@ -93,7 +93,7 @@ _LABEL_STRIP_RE = re.compile(
     r"tel|mobile|telefon|handy|rufnummer|email|e-mail)\s*:\s*)(.+)$"
 )
 
-_ollama_ready = False  # cached per-process once a model has been confirmed available
+
 
 # Set by generate() after each call so callers (e.g. app.py) can show the user
 # whether/why the AI gap-filler ran. One of:
@@ -102,15 +102,25 @@ _ollama_ready = False  # cached per-process once a model has been confirmed avai
 LAST_AI_STATUS = ""
 
 
-def _ollama_request(path: str, payload: dict = None, method: str = "GET", timeout: float = 5):
+def _ollama_request(path: str, payload: dict = None, method: str = "GET",
+                    timeout: float = 5, max_response_bytes: int = 64 * 1024):
+    """Make a request to the local Ollama server. Enforces a response size
+    cap (default 64 KB) to prevent unbounded memory consumption from a
+    malformed or runaway model response."""
     url = _OLLAMA_URL + path
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(
         url, data=data, method=method,
         headers={"Content-Type": "application/json"} if data else {},
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = r.read(max_response_bytes + 1)
+            if len(raw) > max_response_bytes:
+                raise ValueError(f"Ollama response exceeded {max_response_bytes} bytes")
+            return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Ollama returned invalid JSON: {e}") from e
 
 
 def _is_ollama_up(timeout: float = 1.5) -> bool:
@@ -159,22 +169,30 @@ def pull_ai_model_blocking(model: str = AI_MODEL, timeout: float = 600) -> bool:
         return False
 
 
+# Cache expiry: re-verify Ollama is alive every 5 minutes so a mid-session
+# crash doesn't silently disable AI for the rest of the process lifetime.
+_ollama_ready_at = 0.0
+_OLLAMA_CACHE_TTL = 300  # seconds
+
+
 def ensure_ai_ready(model: str = AI_MODEL) -> bool:
     """Best-effort, bounded check that a local Ollama server is running and
     the model is already pulled. Will start the server if it's stopped (fast,
     ~6s max) but will NOT download the model on demand — that only happens
     via start.sh or pull_ai_model_blocking(), so a request can never block for
-    minutes waiting on a download. Safe to call repeatedly — cheap no-op once
-    ready, and cheap to fail fast if the model just isn't there yet."""
-    global _ollama_ready
-    if _ollama_ready:
+    minutes waiting on a download. Re-verifies every 5 minutes."""
+    global _ollama_ready_at
+    now = time.monotonic()
+    if _ollama_ready_at and (now - _ollama_ready_at) < _OLLAMA_CACHE_TTL:
         return True
     if not _is_ollama_up():
         if not _start_ollama_server():
+            _ollama_ready_at = 0.0
             return False
     if not _model_available(model):
+        _ollama_ready_at = 0.0
         return False  # don't block a request on a multi-minute download
-    _ollama_ready = True
+    _ollama_ready_at = now
     return True
 
 
@@ -197,14 +215,28 @@ def _strip_known_label(line: str) -> str:
 def _line_number(raw) -> int:
     """Tolerate the model returning a line number as an int, a float, or a
     numeric string; anything else (null, a written-out value, garbage) is
-    treated as "no line selected"."""
+    treated as 'no line selected'. Negative numbers are always rejected."""
     if isinstance(raw, bool):
         return 0
     if isinstance(raw, (int, float)):
-        return int(raw)
-    if isinstance(raw, str) and raw.strip().lstrip("-").isdigit():
-        return int(raw.strip())
+        n = int(raw)
+        return n if n > 0 else 0
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.isdigit() and int(s) > 0:
+            return int(s)
     return 0
+
+
+def _sanitize_value(v: str) -> str:
+    """Clean up extracted values: strip whitespace, remove stray punctuation
+    at boundaries, collapse internal whitespace, and strip HTML entities."""
+    if not v:
+        return ""
+    v = v.strip().strip(",.;:\"'")
+    v = re.sub(r"\s+", " ", v)
+    v = re.sub(r"&(?:amp|lt|gt|quot|apos|nbsp);?", " ", v)
+    return v.strip()
 
 
 # Per-field shape sanity checks. Because values now always come from a real
@@ -233,24 +265,53 @@ def _looks_like_email(v: str) -> bool:
 def _looks_like_person_name(v: str) -> bool:
     if not v or "@" in v or _COMPANY_SUFFIX_RE.search(v):
         return False
+    # Reject names that are all digits/symbols
+    if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
+        return False
     words = v.split()
-    return 1 <= len(words) <= 4 and len(v) <= 40
+    return 1 <= len(words) <= 4 and len(v) <= 50
+
+
+def _looks_like_company(v: str) -> bool:
+    """Reject values that clearly aren't company names: too short, all digits,
+    or common noise words the model may pick."""
+    if not v or len(v) < 2 or len(v) > 80:
+        return False
+    if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
+        return False
+    noise = {"apply", "apply now", "click here", "submit", "job", "position",
+             "role", "n/a", "not provided", "none", "null", "tbd", "various"}
+    if v.strip().lower() in noise:
+        return False
+    return True
+
+
+def _looks_like_role(v: str) -> bool:
+    """Reject values that clearly aren't job titles."""
+    if not v or len(v) < 3 or len(v) > 100:
+        return False
+    if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
+        return False
+    noise = {"apply", "apply now", "click here", "submit", "company",
+             "n/a", "not provided", "none", "null", "tbd"}
+    if v.strip().lower() in noise:
+        return False
+    return True
+
+
+def _looks_like_location(v: str) -> bool:
+    """Reject values that clearly aren't locations."""
+    if not v or len(v) < 2 or len(v) > 80:
+        return False
+    if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
+        return False
+    return True
 
 
 # A real company/role/location heading is a short label, never a narrative
-# sentence — reject a picked line that reads like prose instead (contains an
-# email, uses first/second-person pronouns, or is a long sentence ending in
-# terminal punctuation) rather than accept whatever real-but-wrong line the
-# model pointed at just because it happens to be genuine JD text.
+# sentence — reject a picked line that reads like prose instead.
 _PROSE_PRONOUNS_RE = re.compile(r"(?i:\b(?:we|we're|we'll|you|you'll|you're|our|us|i'm)\b)")
 
-# A heading never uses a verb describing what the company/org IS DOING
-# (hiring, seeking, looking for, expanding, founded, based, etc.) — that's
-# always a descriptive sentence ABOUT the company, not the field itself. This
-# specifically catches lines like "Acme Robotics GmbH is hiring in Berlin,
-# Germany." being mistaken for a role/title — confirmed in testing that the
-# model can confidently misjudge this even when asked to double-check itself,
-# so it's enforced deterministically here instead of relying on the model.
 _DESCRIPTIVE_SENTENCE_RE = re.compile(
     r"(?i:\bis\s+hiring\b|\bare\s+hiring\b|\bis\s+looking\s+for\b|\bis\s+seeking\b|"
     r"\bare\s+seeking\b|\bhas\s+been\b|\bhave\s+been\b|\bis\s+a\s+|\bis\s+an\s+|"
@@ -270,13 +331,76 @@ def _looks_like_a_heading(v: str) -> bool:
     return True
 
 
+def _validate_and_clean(cleaned: dict) -> dict:
+    """Apply all shape/sanity checks to AI-extracted fields in one place.
+    Deterministic post-processing that catches the model's common mistakes."""
+
+    # Sanitize all values
+    for field in _AI_FIELDS:
+        cleaned[field] = _sanitize_value(cleaned.get(field, ""))
+
+    # Salary shape check
+    if cleaned.get("salary_range") and not _looks_like_salary(cleaned["salary_range"]):
+        cleaned["salary_range"] = ""
+
+    # A company/role/location line that IS a salary figure is never legitimate
+    for field in ("company", "role", "location"):
+        if cleaned.get(field) and _looks_like_salary(cleaned[field]):
+            cleaned[field] = ""
+
+    # Phone / email / name shape checks
+    if cleaned.get("recruiter_phone") and not _looks_like_phone(cleaned["recruiter_phone"]):
+        cleaned["recruiter_phone"] = ""
+    if cleaned.get("recruiter_email") and not _looks_like_email(cleaned["recruiter_email"]):
+        cleaned["recruiter_email"] = ""
+    if cleaned.get("recruiter_name") and not _looks_like_person_name(cleaned["recruiter_name"]):
+        cleaned["recruiter_name"] = ""
+
+    # Company / role / location specific shape checks
+    if cleaned.get("company") and not _looks_like_company(cleaned["company"]):
+        cleaned["company"] = ""
+    if cleaned.get("role") and not _looks_like_role(cleaned["role"]):
+        cleaned["role"] = ""
+    if cleaned.get("location") and not _looks_like_location(cleaned["location"]):
+        cleaned["location"] = ""
+
+    # Heading check: company/role/location should be short labels, not prose
+    for field in ("company", "role", "location"):
+        val = cleaned.get(field, "")
+        if val and not _looks_like_a_heading(val):
+            cleaned[field] = ""
+
+    # Duplicate line collision: if any two of company/role/location point to the
+    # same text, the model likely mis-assigned one of them — keep the more
+    # specific field and blank the other.
+    for f1, f2, keep in [
+        ("company", "location", "location"),
+        ("company", "role", "role"),
+        ("role", "location", "location"),
+    ]:
+        if cleaned.get(f1) and cleaned.get(f1) == cleaned.get(f2):
+            cleaned[f1 if keep == f2 else f2] = ""
+
+    # Recruiter fields duplicating into company/role/location
+    rec_email = cleaned.get("recruiter_email", "")
+    rec_phone = cleaned.get("recruiter_phone", "")
+    for field in ("company", "role", "location"):
+        val = cleaned.get(field, "")
+        if val and rec_email and rec_email in val:
+            cleaned[field] = ""
+        if val and rec_phone and rec_phone in val:
+            cleaned[field] = ""
+
+    return cleaned
+
+
 def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> tuple:
     """Ask the local model WHICH LINE of the JD contains each field (never to
     write the value itself), then extract that field's value as the literal
     text of that line. Returns (dict|None, status_str). Never raises — any
     failure (Ollama not installed/running, model missing, timeout, malformed
     response) is reported via the status string so callers can fall back
-    gracefully."""
+    gracefully. Retries once on malformed JSON."""
     if not text or not text.strip():
         return None, "empty text"
 
@@ -292,66 +416,60 @@ def ai_extract_fields(text: str, model: str = AI_MODEL, timeout: float = 60) -> 
         "model": model,
         "format": "json",
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 256},
         "messages": [
             {"role": "system", "content": _AI_SYSTEM_PROMPT},
             {"role": "user", "content": numbered_text[:6000]},
         ],
     }
-    try:
-        resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
-        content = resp.get("message", {}).get("content", "")
-        data = json.loads(content)
-        if not isinstance(data, dict):
-            return None, "model returned non-object JSON"
 
-        cleaned = {}
-        for field in _AI_FIELDS:
-            n = _line_number(data.get(field))
-            cleaned[field] = _strip_known_label(lines[n - 1]) if 1 <= n <= len(lines) else ""
+    max_attempts = 2
+    last_error = ""
+    for attempt in range(max_attempts):
+        try:
+            resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
+            content = (resp.get("message") or {}).get("content", "")
+            if not content.strip():
+                last_error = "model returned empty response"
+                continue
 
-        # Two fields legitimately pointing at the exact same line (e.g. a
-        # "Title | Company | Location" line) isn't invention, just imprecise —
-        # but company/location duplicating exactly is more often the model
-        # picking one line for both, so prefer keeping it as the location.
-        if cleaned.get("company") and cleaned.get("company") == cleaned.get("location"):
-            cleaned["company"] = ""
+            # Try to extract JSON even if model wraps it in markdown fences
+            json_text = content.strip()
+            if json_text.startswith("```"):
+                json_text = re.sub(r"^```\w*\s*", "", json_text)
+                json_text = re.sub(r"\s*```$", "", json_text)
 
-        if cleaned.get("salary_range") and not _looks_like_salary(cleaned["salary_range"]):
-            cleaned["salary_range"] = ""
-        # A company/role/location line that IS a salary figure (e.g. the
-        # model duplicating the salary line into "company" too — observed in
-        # testing) is never legitimate; drop it from those fields.
-        for field in ("company", "role", "location"):
-            if cleaned.get(field) and _looks_like_salary(cleaned[field]):
-                cleaned[field] = ""
-        if cleaned.get("recruiter_phone") and not _looks_like_phone(cleaned["recruiter_phone"]):
-            cleaned["recruiter_phone"] = ""
-        if cleaned.get("recruiter_email") and not _looks_like_email(cleaned["recruiter_email"]):
-            cleaned["recruiter_email"] = ""
-        if cleaned.get("recruiter_name") and not _looks_like_person_name(cleaned["recruiter_name"]):
-            cleaned["recruiter_name"] = ""
-        # company/role/location should be short label-like lines, not prose —
-        # reject a line that reads like a narrative sentence (see comment on
-        # _looks_like_a_heading) or is absurdly long (a whole paragraph).
-        for field in ("company", "role", "location"):
-            val = cleaned.get(field, "")
-            if val and (len(val) > 100 or not _looks_like_a_heading(val)):
-                cleaned[field] = ""
+            data = json.loads(json_text)
+            if not isinstance(data, dict):
+                last_error = "model returned non-object JSON"
+                continue
 
-        # Second pass: re-confirm each surviving candidate with a focused
-        # yes/no question rather than trusting the first pass's line-picking
-        # alone — catches the model having selected a real-but-wrong line
-        # (e.g. a sentence that only mentions the company in passing).
-        cleaned = _verify_selections(cleaned, model, timeout)
+            # Successfully parsed — build the cleaned dict
+            cleaned = {}
+            for field in _AI_FIELDS:
+                n = _line_number(data.get(field))
+                cleaned[field] = _strip_known_label(lines[n - 1]) if 1 <= n <= len(lines) else ""
 
-        return cleaned, "ok"
-    except urllib.error.URLError as e:
-        global _ollama_ready
-        _ollama_ready = False  # server may have gone away; re-check next call
-        return None, f"Ollama request failed: {e}"
-    except Exception as e:
-        return None, f"AI extraction failed: {e}"
+            cleaned = _validate_and_clean(cleaned)
+
+            # Second pass: re-confirm each surviving candidate
+            cleaned = _verify_selections(cleaned, model, timeout)
+
+            return cleaned, "ok"
+
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = f"JSON parse error (attempt {attempt + 1}): {e}"
+            if attempt < max_attempts - 1:
+                time.sleep(0.5)  # brief pause before retry
+            continue
+        except urllib.error.URLError as e:
+            global _ollama_ready_at
+            _ollama_ready_at = 0.0  # server may have gone away; re-check next call
+            return None, f"Ollama request failed: {e}"
+        except Exception as e:
+            return None, f"AI extraction failed: {e}"
+
+    return None, f"AI extraction failed after {max_attempts} attempts: {last_error}"
 
 
 def _verify_selections(cleaned: dict, model: str, timeout: float) -> dict:
@@ -367,7 +485,7 @@ def _verify_selections(cleaned: dict, model: str, timeout: float) -> dict:
         "model": model,
         "format": "json",
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 128},
         "messages": [
             {"role": "system", "content": _AI_VERIFY_PROMPT},
             {"role": "user", "content": prompt[:4000]},
@@ -375,8 +493,16 @@ def _verify_selections(cleaned: dict, model: str, timeout: float) -> dict:
     }
     try:
         resp = _ollama_request("/api/chat", payload, method="POST", timeout=timeout)
-        content = resp.get("message", {}).get("content", "")
-        data = json.loads(content)
+        content = (resp.get("message") or {}).get("content", "")
+        if not content.strip():
+            return cleaned
+
+        json_text = content.strip()
+        if json_text.startswith("```"):
+            json_text = re.sub(r"^```\w*\s*", "", json_text)
+            json_text = re.sub(r"\s*```$", "", json_text)
+
+        data = json.loads(json_text)
         if not isinstance(data, dict):
             return cleaned
         for field in candidates:
