@@ -107,4 +107,40 @@ class TestGetTagsForJobs:
         db.commit()
         job_id = db.execute("SELECT id FROM jobs ORDER BY id DESC LIMIT 1").fetchone()[0]
         result = get_tags_for_jobs(db, [job_id])
-        assert job_id not in result
+        assert result == {}
+
+
+class TestRecruiterExtraction:
+    def test_applicant_info_not_assigned_to_recruiter(self):
+        from gen_job import generate
+        jd_text = """
+        Company: Acme Corp
+        Role: Software Engineer
+        Location: Berlin
+        We are hiring a software engineer.
+        """
+        cover_text = """
+        Dear Hiring Manager,
+        My name is John Applicant. You can contact me at john.applicant@example.com or +49 123 456789.
+        Sincerely,
+        John Applicant
+        """
+        job = generate(jd_text, cv_text="John Applicant CV john.applicant@example.com", cover_text=cover_text)
+        assert job["recruiter_name"] == ""
+        assert job["recruiter_email"] == ""
+        assert job["recruiter_phone"] == ""
+
+    def test_valid_recruiter_extracted_from_jd(self):
+        from gen_job import generate
+        jd_text = """
+        Company: TechGmbH
+        Role: Python Developer
+        Contact Person: Sarah Smith
+        Email: jobs@techgmbh.de
+        Telefon: +49 89 123456
+        """
+        cover_text = "My email: applicant@me.com"
+        job = generate(jd_text, cv_text="applicant@me.com", cover_text=cover_text)
+        assert job["recruiter_name"] == "Sarah Smith"
+        assert job["recruiter_email"] == "jobs@techgmbh.de"
+        assert "+49 89 123456" in job["recruiter_phone"]

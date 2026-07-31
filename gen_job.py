@@ -593,14 +593,29 @@ def extract_phone(text: str) -> str:
     return ""
 
 
-def extract_recruiter(text: str) -> tuple:
-    # Case-sensitive on purpose — see note in extract_company(). Using IGNORECASE
-    # here previously let "Ms" match the "ms" inside unrelated words like "systems".
-    # [ \t]+ (not \s+) between name parts so the match can't cross a newline
-    # and swallow the next line (e.g. "Sarah Simonis\nTelephone: ...").
+def extract_applicant_contacts(cv_text: str = "", cover_text: str = "") -> tuple:
+    combined = f"{cv_text} {cover_text}"
+    if not combined.strip():
+        return set(), set()
+    emails = set(re.findall(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,})", combined.lower()))
+    phones = set()
+    for m in re.finditer(_PHONE_CORE, combined):
+        p = _clean_phone(m.group(0))
+        digits = re.sub(r"\D", "", p)
+        if len(digits) >= 6:
+            phones.add(digits)
+    return emails, phones
+
+
+def extract_recruiter(text: str, applicant_emails: set = None, applicant_phones: set = None) -> tuple:
+    if applicant_emails is None:
+        applicant_emails = set()
+    if applicant_phones is None:
+        applicant_phones = set()
+
     name = ""
     m = re.search(
-        r"(?i:contact(?:\s+person)?|ansprechpartner(?:in)?)[ \t]*:[ \t]*([A-Z][a-zA-Z.'\-]+(?:[ \t]+[A-Z][a-zA-Z.'\-]+){1,2})",
+        r"(?i:\b(?:contact(?:\s+person)?|ansprechpartner(?:in)?|recruiter|hiring\s+manager)\b)[ \t]*:[ \t]*([A-Z][a-zA-Z.'\-]+(?:[ \t]+[A-Z][a-zA-Z.'\-]+){1,2})",
         text,
     )
     if m:
@@ -609,8 +624,33 @@ def extract_recruiter(text: str) -> tuple:
         m = re.search(r"\b(?:Mrs?\.?|Ms\.?|Dr\.?)[ \t]+([A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,2})", text)
         if m:
             name = m.group(1).strip()
-    email = _first([r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,})"], text)
+
+    email_matches = re.findall(r"([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,})", text)
+    email = ""
+    for em in email_matches:
+        em_lower = em.lower()
+        if em_lower in applicant_emails:
+            continue
+        if any(em_lower.startswith(prefix) for prefix in ("jobs", "careers", "recruiting", "karriere", "bewerbung", "hr", "contact", "info", "talent")):
+            email = em
+            break
+        m_near = re.search(r"(?i:\b(?:contact|ansprechpartner|apply|bewerbung|recruiter|hr)\b[^\n]{0,80}" + re.escape(em) + r"|" + re.escape(em) + r"[^\n]{0,80}\b(?:contact|ansprechpartner|apply)\b)", text)
+        if m_near:
+            email = em
+            break
+
+    if not email and email_matches:
+        for em in email_matches:
+            if em.lower() not in applicant_emails:
+                email = em
+                break
+
     phone = extract_phone(text)
+    if phone:
+        digits = re.sub(r"\D", "", phone)
+        if digits in applicant_phones:
+            phone = ""
+
     return name, email, phone
 
 
@@ -668,6 +708,8 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
     global LAST_AI_STATUS
     text = jd_text  # primary source for most fields
 
+    app_emails, app_phones = extract_applicant_contacts(cv_text, cover_text)
+
     company  = extract_company(text)
     role     = extract_role(text)
     location = extract_location(text)
@@ -676,26 +718,13 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
     source   = extract_source(text, job_url)
     tags     = extract_tags(text)
     interest = extract_interest(text, cv_text, cover_text)
-    rec_name, rec_email, rec_phone = extract_recruiter(text)
-    if not rec_name and not rec_email and not rec_phone:
-        # fall back to the cover letter (e.g. "Dear Mr. Smith", signed contact)
-        rec_name, rec_email, rec_phone = extract_recruiter(cover_text)
+    rec_name, rec_email, rec_phone = extract_recruiter(text, app_emails, app_phones)
 
     # Regex extraction is the fast, accurate path for structured postings and is
     # always authoritative — the local AI model is ONLY asked to fill in fields
     # regex left blank (it's small/fast but noticeably less reliable, so it must
     # never override a value regex already found). This also means well-formed
     # JDs never pay the AI latency cost at all.
-    #
-    # Only company OR role missing triggers the AI call — those two are stated
-    # in virtually every real posting, so a blank one is a strong signal the
-    # regex didn't recognize this JD's format. location/salary/recruiter info
-    # are legitimately absent from a large fraction of real postings (most
-    # don't list salary, many don't name a specific recruiter), so a blank
-    # there is NOT treated as a failure worth paying the AI's latency for —
-    # doing so would fire the AI on nearly every JD and risks it hallucinating
-    # a value (e.g. a salary) that was simply never mentioned. Those fields are
-    # still opportunistically backfilled below if the AI does end up running.
     if not company or not role:
         ai_result, status = ai_extract_fields(text)
         LAST_AI_STATUS = status
@@ -704,11 +733,20 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
             role      = role      or ai_result.get("role", "")
             location  = location  or ai_result.get("location", "")
             salary    = salary    or ai_result.get("salary_range", "")
-            rec_name  = rec_name  or ai_result.get("recruiter_name", "")
-            rec_email = rec_email or ai_result.get("recruiter_email", "")
-            rec_phone = rec_phone or ai_result.get("recruiter_phone", "")
+            ai_rec_email = ai_result.get("recruiter_email", "")
+            if ai_rec_email and ai_rec_email.lower() not in app_emails:
+                rec_email = rec_email or ai_rec_email
+            ai_rec_phone = ai_result.get("recruiter_phone", "")
+            if ai_rec_phone and re.sub(r"\D", "", ai_rec_phone) not in app_phones:
+                rec_phone = rec_phone or ai_rec_phone
+            rec_name = rec_name or ai_result.get("recruiter_name", "")
     else:
         LAST_AI_STATUS = "skipped (regex found company and role)"
+
+    if rec_email and rec_email.lower() in app_emails:
+        rec_email = ""
+    if rec_phone and re.sub(r"\D", "", rec_phone) in app_phones:
+        rec_phone = ""
 
     resume_v = extract_resume_version(cv_path)
 
@@ -720,7 +758,7 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
         "source":             source,
         "location":           location,
         "salary_range":       salary,
-         "jd":                 jd_text,
+        "jd":                 jd_text,
         "job_url":            job_url,
         "tags":               tags,
         "interest_score":     interest,

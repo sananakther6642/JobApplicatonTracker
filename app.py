@@ -670,8 +670,8 @@ def dashboard():
             kanban_priority[job["id"]] = compute_priority(job, today_d)
 
     # Follow-up due today (explicit follow_up_date <= today)
-    followup_due = [j for j in followups if (j.get("follow_up_date") or "").strip() and
-                    (j.get("follow_up_date") or "").strip() <= today]
+    followup_due = [j for j in followups if (j["follow_up_date"] or "").strip() and
+                    (j["follow_up_date"] or "").strip() <= today]
 
     return render_template(
 
