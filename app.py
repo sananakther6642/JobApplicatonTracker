@@ -532,7 +532,7 @@ def dashboard():
                 OR (
                     (follow_up_date = '' OR follow_up_date IS NULL)
                     AND status IN ('applied','screening','ghosted')
-                    AND applied_date <= date('now', '-7 days')
+                    AND applied_date <= date('now', '-14 days')
                 )
             )
             ORDER BY applied_date ASC
@@ -972,7 +972,7 @@ EMPTY_JOB_TEMPLATE = {
     "company": "", "role": "", "status": "applied",
     "applied_date": "", "source": "", "location": "", "salary_range": "",
     "jd": "", "job_url": "", "tags": "", "interest_score": "3", "notes": "",
-    "next_action": "Follow up in 1 week", "follow_up_date": "", "offer_deadline": "",
+    "next_action": "Follow up in 2 weeks", "follow_up_date": "", "offer_deadline": "",
     "resume_version": "", "recruiter_name": "", "recruiter_email": "",
     "recruiter_phone": "", "recruiter_linkedin": "",
 }
