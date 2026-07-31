@@ -144,3 +144,25 @@ class TestRecruiterExtraction:
         assert job["recruiter_name"] == "Sarah Smith"
         assert job["recruiter_email"] == "jobs@techgmbh.de"
         assert "+49 89 123456" in job["recruiter_phone"]
+
+
+class TestSalaryInterest:
+    def test_salary_above_50k_boosts_interest_to_medium(self):
+        from gen_job import extract_interest, _is_salary_above_50k_euro
+        assert _is_salary_above_50k_euro("€55,000 / year") is True
+        assert _is_salary_above_50k_euro("50k EUR") is True
+        assert _is_salary_above_50k_euro("60.000 €") is True
+        assert _is_salary_above_50k_euro("40.000 €") is False
+
+        # Low keyword overlap (1 word -> base_score 1)
+        jd_text = "We are hiring a software developer."
+        cv_text = "Experienced accounting manager looking for finance roles."
+        
+        # Without 50k salary -> score is 1
+        score_low = extract_interest(jd_text, cv_text, salary_text="€30,000")
+        assert score_low == "1"
+
+        # With >50k salary -> score boosted to at least 3 (med)
+        score_boosted = extract_interest(jd_text, cv_text, salary_text="€60,000")
+        assert score_boosted == "3"
+

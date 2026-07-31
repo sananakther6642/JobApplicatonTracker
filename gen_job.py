@@ -805,19 +805,57 @@ def extract_tags(text: str) -> str:
     return ",".join(found[:12])
 
 
-def extract_interest(jd_text: str, cv_text: str, cover_text: str = "") -> str:
-    """Rate 1-5 by keyword overlap between JD requirements and CV/cover letter."""
+def _is_salary_above_50k_euro(salary_text: str, jd_text: str = "") -> bool:
+    """Check if salary text (or JD text) mentions a salary of 50k EUR or higher."""
+    target_text = f"{salary_text}\n{jd_text}"
+    if not target_text.strip():
+        return False
+
+    # 1. Matches like 50k, 50K, 60k, 100k near € or EUR or Euro, or in salary_text
+    k_matches = re.findall(r"(?i)(?:€|EUR|Euro)?\s*(\d{2,3})\s*k\b\s*(?:€|EUR|Euro)?", target_text)
+    for m in k_matches:
+        try:
+            val = float(m) * 1000
+            if val >= 50000:
+                return True
+        except ValueError:
+            pass
+
+    # 2. Matches like 50,000 or 50.000 or 50000 or 65.000
+    num_matches = re.findall(r"(?i)(?:€|EUR|Euro)?\s*(\d{2,3}[\.,]\d{3}|\d{5,6})\s*(?:€|EUR|Euro)?", target_text)
+    for m in num_matches:
+        clean_num = m.replace(".", "").replace(",", "")
+        try:
+            val = float(clean_num)
+            if val >= 50000:
+                return True
+        except ValueError:
+            pass
+
+    return False
+
+
+def extract_interest(jd_text: str, cv_text: str = "", cover_text: str = "", salary_text: str = "") -> str:
+    """Rate 1-5 by keyword overlap between JD requirements and CV/cover letter.
+    If salary is above 50k Euro, set interest score to at least 3 (Medium)."""
     applicant_text = f"{cv_text} {cover_text}".strip()
     if not applicant_text:
-        return "3"
-    jd_words = set(re.findall(r'\b[a-z]{3,}\b', jd_text.lower()))
-    cv_words  = set(re.findall(r'\b[a-z]{3,}\b', applicant_text.lower()))
-    overlap = len(jd_words & cv_words)
-    if overlap > 120: return "5"
-    if overlap > 80:  return "4"
-    if overlap > 50:  return "3"
-    if overlap > 25:  return "2"
-    return "1"
+        base_score = 3
+    else:
+        jd_words = set(re.findall(r'\b[a-z]{3,}\b', jd_text.lower()))
+        cv_words  = set(re.findall(r'\b[a-z]{3,}\b', applicant_text.lower()))
+        overlap = len(jd_words & cv_words)
+        if overlap > 120: base_score = 5
+        elif overlap > 80: base_score = 4
+        elif overlap > 50: base_score = 3
+        elif overlap > 25: base_score = 2
+        else: base_score = 1
+
+    if _is_salary_above_50k_euro(salary_text, jd_text):
+        if base_score < 3:
+            base_score = 3
+
+    return str(base_score)
 
 
 def extract_resume_version(cv_path: str) -> str:
@@ -843,7 +881,6 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
     job_url  = extract_job_url(text)
     source   = extract_source(text, job_url)
     tags     = extract_tags(text)
-    interest = extract_interest(text, cv_text, cover_text)
     rec_name, rec_email, rec_phone = extract_recruiter(text, app_emails, app_phones)
 
     # Regex extraction is the fast, accurate path for structured postings and is
@@ -868,6 +905,8 @@ def generate(jd_text: str, cv_text: str = "", cover_text: str = "",
             rec_name = rec_name or ai_result.get("recruiter_name", "")
     else:
         LAST_AI_STATUS = "skipped (regex found company and role)"
+
+    interest = extract_interest(text, cv_text, cover_text, salary_text=salary)
 
     if rec_email and rec_email.lower() in app_emails:
         rec_email = ""
