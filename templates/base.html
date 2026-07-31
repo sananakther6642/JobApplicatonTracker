@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}JAT{% endblock %}</title>
+<script>
+(function() {
+  function getAutoTheme() {
+    var saved = localStorage.getItem('theme');
+    if (saved && (saved === 'dark' || saved === 'light')) return saved;
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+    var hour = new Date().getHours();
+    return (hour >= 19 || hour < 7) ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', getAutoTheme());
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -524,22 +537,49 @@
 </div>
 
 <script>
-function toggleDark() {
-  const html = document.documentElement;
-  const isDark = html.getAttribute('data-theme') === 'dark';
-  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  localStorage.setItem('theme', isDark ? 'light' : 'dark');
-  document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
-}
-(function() {
-  // Respect explicit user preference; fall back to OS preference
+function getAutoTheme() {
   const saved = localStorage.getItem('theme');
-  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const theme = saved || (prefersDark ? 'dark' : 'light');
+  if (saved && (saved === 'dark' || saved === 'light')) return saved;
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) return 'light';
+  const hour = new Date().getHours();
+  return (hour >= 19 || hour < 7) ? 'dark' : 'light';
+}
+
+function applyThemeUI(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const btn = document.getElementById('darkToggle');
-  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
-})();
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    btn.setAttribute('title', theme === 'dark' ? 'Switch to Light mode' : 'Switch to Dark mode');
+  }
+}
+
+function toggleDark() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', next);
+  applyThemeUI(next);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const theme = getAutoTheme();
+  applyThemeUI(theme);
+
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (!localStorage.getItem('theme')) {
+        applyThemeUI(getAutoTheme());
+      }
+    });
+  }
+
+  setInterval(function() {
+    if (!localStorage.getItem('theme')) {
+      applyThemeUI(getAutoTheme());
+    }
+  }, 300000);
+});
 
 // Toast system
 function showToast(msg, undoCallback, autoDismissMs) {
