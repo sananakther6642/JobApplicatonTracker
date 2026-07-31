@@ -2701,5 +2701,5 @@ if __name__ == "__main__":
         threading.Thread(target=_open_browser, daemon=True).start()
 
     is_frozen = getattr(sys, 'frozen', False)
-    app.run(host="0.0.0.0", debug=not is_frozen, port=5050, threaded=True)
+    app.run(host="127.0.0.1", debug=not is_frozen, port=5050, threaded=True)
 
