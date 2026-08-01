@@ -88,7 +88,7 @@ if [ "$BG_MODE" -eq 0 ] && [ -t 0 ]; then
     <string>com.jat.jobapplicationtracker</string>
     <key>ProgramArguments</key>
     <array>
-        <string>${SCRIPT_PATH}/start.sh</string>
+        <string>${SCRIPT_PATH}/Job Application Tracker.app/Contents/MacOS/Job Application Tracker</string>
         <string>background</string>
     </array>
     <key>RunAtLoad</key>
