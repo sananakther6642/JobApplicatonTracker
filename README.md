@@ -51,17 +51,30 @@ That's it. `start.sh` (Mac/Linux) or `start.bat` (Windows) installs Python depen
 
 ```bash
 # Mac / Linux
-open http://localhost:5050
+./start.sh
 
-# Windows
-start http://localhost:5050
+# Windows (Command Prompt)
+start.bat
+
+# Or manually:
+python -m venv .venv
+source .venv/bin/activate  # (Mac/Linux) or .venv\Scripts\Activate (Windows)
+python -m pip install -r requirements.txt
+python app.py
 ```
 
-### Windows Usage & Auto-Setup
+That's it. `start.sh` (Mac/Linux) or `start.bat` (Windows) installs Python dependencies (Flask, pdfminer.six) automatically, checks local Ollama AI availability, and launches JAT on port `5050`.
 
-- **Double-click `start.bat`**: Auto-creates `.venv`, installs Python requirements, sets up Ollama & model automatically (if missing), launches the server on port 5050, and opens `http://localhost:5050` in your default browser.
-- **Double-click `launch_jat.vbs`**: Runs `start.bat` silently in the background without leaving an active CMD window open.
-- **Getting Updates**: Simply run `git pull` — every time you pull the latest code, `start.bat` ensures any updated dependencies are installed automatically on launch.
+### OS Auto-Start & Background Execution Options
+
+Both `start.sh` (Mac/Linux) and `start.bat` (Windows) offer interactive startup options when run:
+
+1. **Option 1: System Boot Auto-Start**:
+   - **Windows**: Places a hidden launcher script in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\launch_jat_autostart.vbs`.
+   - **macOS**: Registers a native LaunchAgent (`com.jat.jobapplicationtracker.plist`) pointing to `Job Application Tracker.app` so macOS System Settings cleanly identifies the background item.
+   - **Status-Aware**: If auto-start is already enabled, answering `N` keeps it enabled rather than deleting it.
+2. **Option 2: Run Hidden in Background**:
+   - Launches JAT silently in the background, opens `http://localhost:5050` in your default browser as soon as the server is ready, and closes the terminal prompt immediately.
 
 ---
 
@@ -113,13 +126,11 @@ company · role · location · salary · tags · recruiter name/email/phone · i
 
 - **Clipboard paste**: `📋 Paste from Clipboard` button populates the JD textarea in one click
 - **Offline extraction**: Regex-based and instant for structured postings (LinkedIn, Indeed, StepStone, German boards — understands both English and German labels like `Standort`, `Gehalt`, `Ansprechpartner`)
-- **Optional local AI gap-filler**: If a JD is unstructured and regex can't find a company or role, JAT asks a small local model (`qwen2.5:0.5b` via [Ollama](https://ollama.com)) to fill only the missing fields — free, fully offline, no API key required
-- **CV/Cover Letter scoring**: Upload your PDF alongside the JD → interest score is calculated from keyword overlap and the files are automatically attached to the job
-- **Always editable**: The JSON panel is editable before pushing — whether from regex, AI, or your own typing, there's a standing reminder to review before saving
-
-Upload your CV/cover letter PDFs alongside → interest score calculated from keyword overlap with the JD, **and** the files themselves are attached to the job's Documents as soon as you push.
-
-> ⚠️ **Heads up:** Auto-extracted and AI-assisted fields can occasionally be wrong — always review before pushing to the tracker.
+- **Hardened Local AI Model**: If a JD is unstructured and regex can't find a company or role, JAT uses a small local model (`qwen2.5:0.5b` via [Ollama](https://ollama.com)) with strict output shape validation, memory limits, and retry loops to fill only missing fields — free, fully offline, no API key required
+- **Applicant & Recruiter Contact Isolation**: CV/Cover Letter email and phone numbers are strictly isolated so your personal details never populate recruiter contact fields
+- **Automated Interest Score & €50k+ Salary Rule**: Interest score (1–5) is computed from keyword overlap between your CV and the JD. Any job with a detected salary of **€50,000 or higher** is automatically rated at least **3/5 ("Medium")**
+- **CV/Cover Letter PDF attachment**: Upload your PDFs alongside → files are automatically parsed, scored, and attached to the created job's Documents on push
+- **Always editable**: The JSON panel is editable before pushing — review all fields before saving
 
 ### Dashboard that actually tells you something
 
