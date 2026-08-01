@@ -152,10 +152,5 @@ if [ "$BG_MODE" -eq 0 ]; then
     echo "Launching JAT application server on http://localhost:5050 ..."
 fi
 
-if command -v open >/dev/null 2>&1; then
-    open "http://localhost:5050" 2>/dev/null || true
-elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "http://localhost:5050" 2>/dev/null || true
-fi
-
 exec "$VENV_PYTHON" app.py
+

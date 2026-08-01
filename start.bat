@@ -120,6 +120,6 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5050" ^| findstr "LISTENING
 )
 
 if "%BG_MODE%"=="0" echo Starting JAT application on http://localhost:5050 ...
-start http://localhost:5050
 "%VENV_PYTHON%" app.py
 if "%BG_MODE%"=="0" pause
+
