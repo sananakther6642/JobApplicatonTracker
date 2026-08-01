@@ -250,7 +250,20 @@ _COMPANY_SUFFIX_RE = re.compile(r"(?i:\bGmbH\b|\bAG\b|\bInc\.?\b|\bLLC\b|\bLtd\.
 
 
 def _looks_like_salary(v: str) -> bool:
-    return bool(v) and bool(re.search(r"\d", v)) and bool(_MONEY_RE.search(v))
+    if not v:
+        return False
+    # Must contain at least 2 digits (a real salary has numbers)
+    digits = re.findall(r"\d", v)
+    if len(digits) < 2:
+        return False
+    # Must match a currency/money pattern
+    if not _MONEY_RE.search(v):
+        return False
+    # Reject noise phrases that aren't actual salary figures
+    noise = re.compile(r"(?i:^(?:and|competitive|negotiable|based on)\b)")
+    if noise.search(v.strip()):
+        return False
+    return True
 
 
 def _looks_like_phone(v: str) -> bool:
@@ -274,27 +287,50 @@ def _looks_like_person_name(v: str) -> bool:
 
 def _looks_like_company(v: str) -> bool:
     """Reject values that clearly aren't company names: too short, all digits,
-    or common noise words the model may pick."""
-    if not v or len(v) < 2 or len(v) > 80:
+    noise words, bullet points, salary/requirement text, or too many words."""
+    if not v or len(v) < 2 or len(v) > 60:
         return False
     if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
         return False
+    # Max ~6 words for a company name (e.g. "Deutsche Bank Technology Center GmbH")
+    if len(v.split()) > 6:
+        return False
+    # Reject bullet points / list items
+    if v.lstrip().startswith(("-", "•", "*", "–", "—")):
+        return False
     noise = {"apply", "apply now", "click here", "submit", "job", "position",
-             "role", "n/a", "not provided", "none", "null", "tbd", "various"}
+             "role", "n/a", "not provided", "none", "null", "tbd", "various",
+             "requirements", "responsibilities", "what we offer", "benefits",
+             "about us", "about the role", "your profile", "our offer"}
     if v.strip().lower() in noise:
+        return False
+    # Reject if it contains salary/compensation keywords
+    salary_noise = re.compile(r"(?i:\bnegotiable\b|\bcompetitive\b|\bbased on\b|\bbenefits\b|\bexperience\b|\byears\b|\brequirements?\b)")
+    if salary_noise.search(v):
         return False
     return True
 
 
 def _looks_like_role(v: str) -> bool:
     """Reject values that clearly aren't job titles."""
-    if not v or len(v) < 3 or len(v) > 100:
+    if not v or len(v) < 3 or len(v) > 80:
         return False
     if not re.search(r"[a-zA-ZäöüÄÖÜß]", v):
         return False
+    # Max ~8 words for a role title
+    if len(v.split()) > 8:
+        return False
+    # Reject bullet points / list items
+    if v.lstrip().startswith(("-", "•", "*", "–", "—")):
+        return False
     noise = {"apply", "apply now", "click here", "submit", "company",
-             "n/a", "not provided", "none", "null", "tbd"}
+             "n/a", "not provided", "none", "null", "tbd",
+             "requirements", "responsibilities", "what we offer", "benefits"}
     if v.strip().lower() in noise:
+        return False
+    # Reject salary/compensation text mistaken as role
+    salary_noise = re.compile(r"(?i:\bnegotiable\b|\bcompetitive\b|\bbased on\b|\bbenefits\b)")
+    if salary_noise.search(v):
         return False
     return True
 
@@ -537,6 +573,7 @@ def extract_company(text: str) -> str:
         r"^(.{2,60}?)\s*\|",                                                    # "Title | Company | Location" header line
         r"(?i:^\s*(?:company|employer|firma|unternehmen|arbeitgeber)\s*:\s*)([^\n,|]{2,60})",  # explicit "Company:"/"Firma:" label
         r"^\s*([A-Z][A-Za-z0-9&.,'\-]{1,55}\s(?:GmbH|AG|Inc\.?|LLC|Ltd\.?|Corp\.?|SE|BV|NV|SAS|AB|PLC))\.?\s*$",  # standalone legal-entity line
+        r"([A-Z][A-Za-z0-9&.,'\- ]{1,55}(?:GmbH|AG|Inc\.?|LLC|Ltd\.?|Corp\.?|SE|BV|NV|SAS|AB|PLC))\s+(?:is|are|has been|was)\s+(?:looking|seeking|hiring|searching|expanding)",  # "Acme GmbH is looking for..."
         r"(?i:\bat\s+)([A-Z][A-Za-z0-9&.,'\-]*(?:\s+[A-Z][A-Za-z0-9&.,'\-]*){0,4})(?=[,.\n])",  # "... at Company,"
     ]
     for p in patterns:
@@ -558,9 +595,12 @@ def extract_role(text: str) -> str:
         return m.group(1).strip()
 
     # "We are hiring/seeking/looking for a <Role>"
-    m = re.search(r"(?i:\b(?:hiring|seeking|looking for)\b(?:\s+a)?\s+)([A-Z][^\n,.]{3,79})", text)
+    m = re.search(r"(?i:\b(?:hiring|seeking|looking for)\b(?:\s+a|\s+an)?\s+)([A-Z][^\n,.]{3,79})", text)
     if m:
-        return m.group(1).strip()
+        val = m.group(1).strip()
+        val = re.split(r"(?i)\s+(?:to\s+|for\s+|in\s+|at\s+|with\s+|who\s+)", val)[0].strip()
+        if _looks_like_role(val):
+            return val
 
     # Fallback: structured postings almost always lead with the title as the very
     # first line. Skip it if that line reads like prose (a sentence opener) rather
@@ -593,27 +633,13 @@ _US_STATES = (
 
 
 def extract_location(text: str) -> str:
-    loc = ""
-    m = re.search(r"(?i:(?:location|standort)\s*:\s*)([^\n,|]{3,50})", text)
-    if m:
-        loc = m.group(1).strip()
+    loc = _first([
+        r"(?i:^\s*(?:location|standort|place|site)\s*:\s*)([^\n,|]{2,60})",
+        r"(?i:\b(?:in|located in)\s+)([A-Z][A-Za-z0-9 \t.,'\-]{2,40}(?:,\s*(?:" + _COUNTRIES + r"|" + _US_STATES + r")))",
+        r"(?i:\b(?:location|standort)\s*:\s*)([A-Z][A-Za-z0-9 \t.,'\-]{2,40})",
+    ], text)
     if not loc:
-        m = re.search(r"(?i:\b(?:based in|located in|office in)\b\s*:?\s*)([^\n,|.]{3,50})", text)
-        if m:
-            loc = m.group(1).strip()
-    if not loc:
-        # "City, ST" (e.g. "Sunrise, FL") or "City, Country" (e.g. "Stuttgart, Germany")
-        # — tried before the "(hybrid)" pattern below so the full city+region is kept
-        # rather than only whichever half happens to sit next to the parenthesis.
-        m = re.search(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*,\s*(?:" + _US_STATES + r"\b|" + _COUNTRIES + r"))", text)
-        if m:
-            loc = m.group(1).strip()
-    if not loc:
-        m = re.search(r"^([A-Z][a-z]+(?:[A-Za-z.\-]*))\s*\((?:hybrid|remote|onsite|on-site)\)", text, re.MULTILINE)
-        if m:
-            loc = m.group(1).strip()
-    if not loc:
-        # "Langenbrettach – permanent" / "City - onsite" style header line
+        # Fallback line-matching for "City - Remote" or "City - Full-time"
         m = re.search(
             r"^([A-Z][A-Za-z.\-]{2,30})\s*[–—-]\s*(?i:permanent|contract|full[- ]?time|part[- ]?time|remote|hybrid|on-?site)\b",
             text, re.MULTILINE,
@@ -653,10 +679,13 @@ def extract_salary(text: str) -> str:
         suffix = "/year" if re.search(r"(?i:/\s*year|per\s*year|annual)", section) else ""
         return f"{currency}{lo} - {currency}{hi}{suffix}"
 
-    return _first([
+    raw_val = _first([
         r"(?:salary|gehalt|vergütung)[:\s]+([^\n|]{3,60})",
         r"compensation[:\s]+([^\n|]{3,60})",
     ], text)
+    if raw_val and _looks_like_salary(raw_val):
+        return raw_val
+    return ""
 
 
 def extract_source(text: str, job_url: str = "") -> str:
