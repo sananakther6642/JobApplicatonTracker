@@ -77,20 +77,25 @@ if "%BG_MODE%"=="0" (
     rem Option 1: Auto-start on Windows reboot
     if exist "%STARTUP_VBS%" (
         echo [Status] System boot auto-start is currently ENABLED.
+        choice /C YN /M "[Option 1] Do you want to DISABLE system boot auto-start"
+        if errorlevel 2 (
+            echo [OK] Keeping system boot auto-start ENABLED.
+        ) else (
+            del /f /q "%STARTUP_VBS%" >nul 2>&1
+            echo [OK] System boot auto-start disabled.
+        )
     ) else (
         echo [Status] System boot auto-start is currently DISABLED.
-    )
-    
-    choice /C YN /M "[Option 1] Auto-start JAT every time Windows boots up"
-    if errorlevel 2 (
-        if exist "%STARTUP_VBS%" del /f /q "%STARTUP_VBS%" >nul 2>&1
-        echo [OK] Windows startup auto-run disabled.
-    ) else (
-        (
-            echo Set WshShell = CreateObject^("WScript.Shell"^)^
-            echo WshShell.Run "cmd /c """"%~dp0start.bat"""" background", 0, False
-        ) > "%STARTUP_VBS%"
-        echo [OK] Windows startup auto-run enabled!
+        choice /C YN /M "[Option 1] Enable JAT auto-start every time Windows boots up"
+        if errorlevel 2 (
+            echo [OK] Keeping system boot auto-start DISABLED.
+        ) else (
+            (
+                echo Set WshShell = CreateObject^("WScript.Shell"^)^
+                echo WshShell.Run "cmd /c """"%~dp0start.bat"""" background", 0, False
+            ) > "%STARTUP_VBS%"
+            echo [OK] System boot auto-start enabled!
+        )
     )
 
     echo.
