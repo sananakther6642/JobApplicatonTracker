@@ -91,9 +91,10 @@ if "%BG_MODE%"=="0" (
             echo [OK] Keeping system boot auto-start DISABLED.
         ) else (
             (
-                echo Set WshShell = CreateObject^("WScript.Shell"^)^
-                echo WshShell.Run "cmd /c """"%~dp0start.bat"""" background", 0, False
+                echo Set WshShell = CreateObject^("WScript.Shell"^)
+                echo WshShell.Run "cmd /c ""%~dp0start.bat"" background", 0, False
             ) > "%STARTUP_VBS%"
+
             echo [OK] System boot auto-start enabled!
         )
     )
