@@ -85,10 +85,9 @@ if [ "$BG_MODE" -eq 0 ] && [ -t 0 ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.jat.tracker</string>
+    <string>com.jat.jobapplicationtracker</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
         <string>${SCRIPT_PATH}/start.sh</string>
         <string>background</string>
     </array>
